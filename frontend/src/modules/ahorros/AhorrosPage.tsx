@@ -265,8 +265,8 @@ export default function AhorrosPage() {
 
       {/* ===== Detail Modal ===== */}
       {selectedBox && boxDetail && (
-        <div ref={overlayRef} className="modal-overlay" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 9999, overflowY: 'auto', padding: '32px 16px' }} onClick={() => { setSelectedBox(null); setBoxDetail(null); setProjection(null) }}>
-          <div ref={modalRef} className="card modal-content modal-large" style={{ padding: 24, maxWidth: 640, width: '100%', margin: '0 auto', position: 'relative', minHeight: 'calc(100vh - 64px)' }} onClick={e => e.stopPropagation()}>
+        <div ref={overlayRef} className="modal-overlay" onClick={() => { setSelectedBox(null); setBoxDetail(null); setProjection(null) }}>
+          <div ref={modalRef} className="card modal-content modal-large" onClick={e => e.stopPropagation()}>
             {/* Modal header */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <div>
@@ -465,16 +465,16 @@ export default function AhorrosPage() {
         .boxes-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; margin-bottom: 24px; }
         .cajita-card { padding: 20px; cursor: pointer; transition: all var(--transition-fast); }
         .cajita-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg); }
-        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 9999; overflow-y: auto; padding: 32px 16px; }
-        .modal-content { padding: 24px; max-width: 640px; width: 100%; margin: 0 auto; position: relative; min-height: calc(100vh - 64px); }
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: flex-start; justify-content: center; z-index: 9999; padding: 40px 16px 16px; overflow-y: auto; }
+        .modal-content { padding: 24px; max-width: 520px; width: 100%; max-height: none; overflow: visible; margin-bottom: 20px; }
         .modal-large { max-width: 640px; }
         .hide-mobile { display: inline; }
         @media (max-width: 768px) {
           .hide-mobile { display: none; }
           .box-form-grid { grid-template-columns: 1fr 1fr; }
           .stats-grid { grid-template-columns: 1fr 1fr !important; }
-          .modal-overlay { padding: 0; }
-          .modal-content { max-width: 100%; border-radius: 0; min-height: 100vh; padding: 16px 16px 32px; margin: 0; }
+          .modal-overlay { padding: 0; align-items: stretch; }
+          .modal-content { max-width: 100%; border-radius: 0; min-height: 100vh; padding: 16px; margin-bottom: 0; }
           .modal-large { max-width: 100%; }
         }
         @media (max-width: 480px) {
