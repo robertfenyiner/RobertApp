@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import {
   PiggyBank, Plus, TrendingUp, Building2, Percent, DollarSign,
   Loader2, X, Pencil, Trash2, ArrowUpCircle, ArrowDownCircle,
@@ -263,8 +264,8 @@ export default function AhorrosPage() {
         {boxes.length === 0 && <div className="card" style={{ padding: 40, textAlign: 'center', color: 'var(--color-text-muted)', gridColumn: '1 / -1' }}>No tienes cajitas. ¡Crea tu primera!</div>}
       </div>
 
-      {/* ===== Detail Modal ===== */}
-      {selectedBox && boxDetail && (
+      {/* ===== Detail Modal (portal to body to escape transform parent) ===== */}
+      {selectedBox && boxDetail && createPortal(
         <div ref={overlayRef} className="modal-overlay" onClick={() => { setSelectedBox(null); setBoxDetail(null); setProjection(null) }}>
           <div ref={modalRef} className="card modal-content modal-large" onClick={e => e.stopPropagation()}>
             {/* Modal header */}
@@ -448,7 +449,7 @@ export default function AhorrosPage() {
             </div>
           </div>
         </div>
-      )}
+      , document.body)}
 
       {/* Scoped Styles */}
       <style>{`
