@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
 } from 'recharts'
@@ -48,6 +48,7 @@ export default function AhorrosPage() {
   const [moveForm, setMoveForm] = useState({ type: 'deposit', amount: 0, description: '' })
   const [newRate, setNewRate] = useState<number | null>(null)
   const [changingRate, setChangingRate] = useState(false)
+  const modalRef = useRef<HTMLDivElement>(null)
 
   const fetchData = useCallback(async () => {
     try {
@@ -98,6 +99,8 @@ export default function AhorrosPage() {
     setSelectedBox(box)
     setNewRate(null)
     setChangingRate(false)
+    // Scroll page to top immediately
+    window.scrollTo({ top: 0, behavior: 'smooth' })
     try {
       const r = await ahorrosAPI.boxDetail(box.id)
       setBoxDetail(r.data)
@@ -105,11 +108,10 @@ export default function AhorrosPage() {
       const p = await ahorrosAPI.projection(box.id, { months: projMonths, monthly_deposit: projDeposit })
       setProjection(p.data)
     } catch (err) { console.error(err) }
-    // Scroll modal to top
-    setTimeout(() => {
-      const modal = document.querySelector('.modal-content')
-      if (modal) modal.scrollTop = 0
-    }, 50)
+    // Scroll modal content to top after it renders
+    requestAnimationFrame(() => {
+      if (modalRef.current) modalRef.current.scrollTop = 0
+    })
   }
   const handleChangeRate = async () => {
     if (!selectedBox || newRate === null) return
@@ -220,18 +222,6 @@ export default function AhorrosPage() {
         </div>
       )}
 
-      {/* Stats */}
-      <div className="stats-grid stagger-children">
-        <div className="card stat-card"><div className="stat-icon" style={{ background: 'var(--color-success-soft)', color: 'var(--color-success)' }}><PiggyBank size={20} /></div>
-          <div className="stat-label">Total Ahorrado</div><div className="stat-value">{fmt(totalAhorros)}</div></div>
-        <div className="card stat-card"><div className="stat-icon" style={{ background: 'var(--color-accent-soft)', color: 'var(--color-accent)' }}><TrendingUp size={20} /></div>
-          <div className="stat-label">Intereses del Mes</div><div className="stat-value">{fmt(summary?.interestThisMonth || 0)}</div></div>
-        <div className="card stat-card"><div className="stat-icon" style={{ background: 'var(--color-warning-soft)', color: 'var(--color-warning)' }}><Percent size={20} /></div>
-          <div className="stat-label">Tasa Promedio</div><div className="stat-value">{avgRate.toFixed(2)}% EA</div></div>
-        <div className="card stat-card"><div className="stat-icon" style={{ background: 'var(--color-success-soft)', color: 'var(--color-success)' }}><DollarSign size={20} /></div>
-          <div className="stat-label">Cajitas Activas</div><div className="stat-value">{boxes.length}</div></div>
-      </div>
-
       {/* Boxes Grid */}
       <h2 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: 12, marginTop: 8 }}>Cajitas de Ahorro</h2>
       <div className="boxes-grid">
@@ -277,7 +267,7 @@ export default function AhorrosPage() {
       {/* ===== Detail Modal ===== */}
       {selectedBox && boxDetail && (
         <div className="modal-overlay" onClick={() => { setSelectedBox(null); setBoxDetail(null); setProjection(null) }}>
-          <div className="card modal-content modal-large" onClick={e => e.stopPropagation()}>
+          <div ref={modalRef} className="card modal-content modal-large" onClick={e => e.stopPropagation()}>
             {/* Modal header */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <div>
