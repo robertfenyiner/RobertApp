@@ -39,7 +39,7 @@ export default function Sidebar({ collapsed, mobileOpen, onToggle, onMobileClose
     <aside className={`sidebar ${collapsed ? 'collapsed' : ''} ${mobileOpen ? 'mobile-open' : ''}`}>
       <div className="sidebar-header">
         <div className="sidebar-logo">
-          <div className="sidebar-logo-icon">💰</div>
+          <img src="/logo.jpg" alt="RobertApp" style={{ width: 36, height: 36, borderRadius: 'var(--radius-sm)', objectFit: 'cover' }} />
           {!collapsed && <span>RobertApp</span>}
         </div>
         <button className="btn-ghost" onClick={onToggle}
