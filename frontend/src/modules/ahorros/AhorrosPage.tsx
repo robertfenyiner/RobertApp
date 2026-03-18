@@ -466,7 +466,7 @@ export default function AhorrosPage() {
         .cajita-card { padding: 20px; cursor: pointer; transition: all var(--transition-fast); }
         .cajita-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg); }
         .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 9999; overflow-y: auto; padding: 32px 16px; }
-        .modal-content { padding: 24px; max-width: 520px; width: 100%; margin: 0 auto; position: relative; }
+        .modal-content { padding: 24px; max-width: 640px; width: 100%; margin: 0 auto; position: relative; min-height: calc(100vh - 64px); }
         .modal-large { max-width: 640px; }
         .hide-mobile { display: inline; }
         @media (max-width: 768px) {
