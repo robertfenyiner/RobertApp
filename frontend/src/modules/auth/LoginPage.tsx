@@ -55,13 +55,14 @@ export default function LoginPage() {
       }}>
         {/* Logo */}
         <div style={{ textAlign: 'center', marginBottom: 32 }}>
-          <div style={{
-            width: 56, height: 56,
-            background: 'linear-gradient(135deg, var(--color-accent), #a78bfa)',
-            borderRadius: 'var(--radius-md)',
-            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: '1.5rem', marginBottom: 16, boxShadow: 'var(--shadow-glow)',
-          }}>💰</div>
+          <img src="/logo.jpg" alt="RobertApp" style={{
+            width: 72, height: 72,
+            borderRadius: '50%',
+            objectFit: 'cover',
+            marginBottom: 16,
+            boxShadow: '0 0 24px rgba(99, 102, 241, 0.3), 0 0 48px rgba(99, 102, 241, 0.1)',
+            border: '3px solid var(--color-accent)',
+          }} />
           <h1 style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--color-text-primary)', marginBottom: 4 }}>
             RobertApp
           </h1>
