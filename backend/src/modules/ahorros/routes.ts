@@ -91,9 +91,16 @@ router.get('/boxes', (req: AuthRequest, res: Response) => {
     JOIN banks b ON sb.bank_id = b.id
     WHERE sb.user_id = ?
     ORDER BY sb.balance DESC
-  `).all(req.user!.id)
+  `).all(req.user!.id) as any[]
 
-  res.json(boxes)
+  // Calculate daily earnings for each box
+  const boxesWithDaily = boxes.map(box => {
+    const dailyRate = Math.pow(1 + box.bank_rate / 100, 1 / 365) - 1
+    const dailyEarnings = Math.round(box.balance * dailyRate * 100) / 100
+    return { ...box, dailyEarnings, dailyRate: Math.round(dailyRate * 10000000) / 100000 }
+  })
+
+  res.json(boxesWithDaily)
 })
 
 // GET /api/ahorros/boxes/:id — detail with movements
@@ -124,7 +131,57 @@ router.get('/boxes/:id', (req: AuthRequest, res: Response) => {
     ORDER BY start_date DESC
   `).all(id)
 
-  res.json({ ...box, movements, rateHistory })
+  // Calculate daily earnings: daily_rate = (1 + EA/100)^(1/365) - 1
+  const dailyRate = Math.pow(1 + box.bank_rate / 100, 1 / 365) - 1
+  const dailyEarnings = Math.round(box.balance * dailyRate * 100) / 100
+
+  res.json({ ...box, movements, rateHistory, dailyEarnings, dailyRate: Math.round(dailyRate * 10000000) / 100000 })
+})
+
+// PUT /api/ahorros/boxes/:id/rate — change rate for a cajita
+router.put('/boxes/:id/rate', (req: AuthRequest, res: Response) => {
+  const { id } = req.params
+  const { new_rate } = req.body
+
+  if (new_rate === undefined || new_rate < 0) {
+    res.status(400).json({ error: 'La nueva tasa EA es requerida y debe ser positiva' })
+    return
+  }
+
+  const box = db.prepare(`
+    SELECT sb.*, b.rate_ea as bank_rate, b.id as bank_id_ref
+    FROM savings_boxes sb
+    JOIN banks b ON sb.bank_id = b.id
+    WHERE sb.id = ? AND sb.user_id = ?
+  `).get(id, req.user!.id) as any
+
+  if (!box) {
+    res.status(404).json({ error: 'Cajita no encontrada' })
+    return
+  }
+
+  const today = new Date().toISOString().split('T')[0]
+
+  // Close the previous rate entry
+  db.prepare(`
+    UPDATE rate_history SET end_date = ? WHERE savings_box_id = ? AND end_date IS NULL
+  `).run(today, id)
+
+  // Insert new rate entry
+  db.prepare(`
+    INSERT INTO rate_history (savings_box_id, rate_ea, start_date) VALUES (?, ?, ?)
+  `).run(id, new_rate, today)
+
+  // Update the bank's rate too (since each box is linked to a bank)
+  db.prepare('UPDATE banks SET rate_ea = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+    .run(new_rate, box.bank_id_ref)
+
+  const updated = db.prepare(`
+    SELECT sb.*, b.name as bank_name, b.rate_ea as bank_rate
+    FROM savings_boxes sb JOIN banks b ON sb.bank_id = b.id WHERE sb.id = ?
+  `).get(id)
+
+  res.json(updated)
 })
 
 // GET /api/ahorros/boxes/:id/projection — compound interest projection

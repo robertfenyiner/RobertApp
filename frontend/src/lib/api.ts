@@ -122,6 +122,8 @@ export const ahorrosAPI = {
     api.post(`/ahorros/boxes/${boxId}/movements`, data),
   projection: (id: number, params?: { months?: number; monthly_deposit?: number }) =>
     api.get(`/ahorros/boxes/${id}/projection`, { params }),
+  changeRate: (id: number, new_rate: number) =>
+    api.put(`/ahorros/boxes/${id}/rate`, { new_rate }),
   banks: () => api.get('/ahorros/banks'),
   createBank: (data: { name: string; rate_ea: number }) =>
     api.post('/ahorros/banks', data),

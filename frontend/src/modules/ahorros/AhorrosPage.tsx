@@ -46,6 +46,8 @@ export default function AhorrosPage() {
   const [projMonths, setProjMonths] = useState(12)
   const [projDeposit, setProjDeposit] = useState(0)
   const [moveForm, setMoveForm] = useState({ type: 'deposit', amount: 0, description: '' })
+  const [newRate, setNewRate] = useState<number | null>(null)
+  const [changingRate, setChangingRate] = useState(false)
 
   const fetchData = useCallback(async () => {
     try {
@@ -94,12 +96,32 @@ export default function AhorrosPage() {
   // Detail modal
   const openDetail = async (box: any) => {
     setSelectedBox(box)
+    setNewRate(null)
+    setChangingRate(false)
     try {
       const r = await ahorrosAPI.boxDetail(box.id)
       setBoxDetail(r.data)
+      setNewRate(r.data.bank_rate)
       const p = await ahorrosAPI.projection(box.id, { months: projMonths, monthly_deposit: projDeposit })
       setProjection(p.data)
     } catch (err) { console.error(err) }
+    // Scroll modal to top
+    setTimeout(() => {
+      const modal = document.querySelector('.modal-content')
+      if (modal) modal.scrollTop = 0
+    }, 50)
+  }
+  const handleChangeRate = async () => {
+    if (!selectedBox || newRate === null) return
+    setChangingRate(true)
+    try {
+      await ahorrosAPI.changeRate(selectedBox.id, newRate)
+      const r = await ahorrosAPI.boxDetail(selectedBox.id)
+      setBoxDetail(r.data)
+      fetchProjection(selectedBox.id, projMonths, projDeposit)
+      fetchData()
+    } catch (err) { console.error(err) }
+    setChangingRate(false)
   }
   const fetchProjection = async (boxId: number, months: number, deposit: number) => {
     try {
@@ -231,6 +253,12 @@ export default function AhorrosPage() {
                 </div>
               </div>
               <div style={{ fontSize: '1.4rem', fontWeight: 700, marginBottom: 4 }}>{fmt(cajita.balance)}</div>
+              {/* Daily earnings */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: cajita.goal > 0 ? 8 : 0 }}>
+                <Sparkles size={13} style={{ color: 'var(--color-success)' }} />
+                <span style={{ fontSize: '0.78rem', color: 'var(--color-success)', fontWeight: 600 }}>+{fmt(cajita.dailyEarnings || 0)}/día</span>
+                <span style={{ fontSize: '0.68rem', color: 'var(--color-text-muted)' }}>({cajita.bank_rate}% EA)</span>
+              </div>
               {cajita.goal > 0 && (
                 <>
                   <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginBottom: 8 }}>Meta: {fmt(cajita.goal)}</div>
@@ -273,6 +301,47 @@ export default function AhorrosPage() {
                   <div style={{ fontSize: '1.3rem', fontWeight: 700, color: 'var(--color-accent)' }}>{fmt(boxDetail.goal)}</div>
                 </div>
               )}
+            </div>
+
+            {/* Daily earnings + Rate change */}
+            <div style={{ padding: 14, borderRadius: 10, background: 'var(--color-bg-elevated)', border: '1px solid var(--color-border)', marginBottom: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Sparkles size={16} style={{ color: 'var(--color-success)' }} />
+                  <div>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)' }}>Ganancia Diaria</div>
+                    <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--color-success)' }}>+{fmt(boxDetail.dailyEarnings || 0)}</div>
+                  </div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)' }}>Ganancia Mensual (aprox)</div>
+                  <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--color-accent)' }}>+{fmt((boxDetail.dailyEarnings || 0) * 30)}</div>
+                </div>
+              </div>
+              <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: 10 }}>
+                <label style={{ fontSize: '0.76rem', fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: 4, display: 'block' }}>Cambiar Tasa EA %</label>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <input className="input" type="number" step="0.01" min="0" value={newRate ?? ''}
+                    onChange={e => setNewRate(Number(e.target.value))} style={{ width: 100 }} />
+                  <span style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)' }}>% EA</span>
+                  <button className="btn btn-primary" onClick={handleChangeRate} disabled={changingRate || newRate === boxDetail.bank_rate}
+                    style={{ padding: '4px 12px', fontSize: '0.78rem' }}>
+                    {changingRate ? <Loader2 size={14} className="loading-spin" /> : 'Aplicar'}
+                  </button>
+                </div>
+                {boxDetail.rateHistory && boxDetail.rateHistory.length > 0 && (
+                  <div style={{ marginTop: 8 }}>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)', marginBottom: 4 }}>Historial de tasas:</div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                      {boxDetail.rateHistory.slice(0, 5).map((rh: any, i: number) => (
+                        <span key={rh.id || i} style={{ fontSize: '0.68rem', padding: '2px 6px', borderRadius: 4, background: i === 0 ? 'var(--color-accent-soft)' : 'var(--color-bg-hover)', color: i === 0 ? 'var(--color-accent)' : 'var(--color-text-muted)' }}>
+                          {rh.rate_ea}% {rh.start_date ? `(${rh.start_date})` : ''}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Add movement */}
