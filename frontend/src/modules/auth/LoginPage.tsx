@@ -54,16 +54,25 @@ export default function LoginPage() {
         position: 'relative', zIndex: 1,
       }}>
         {/* Logo */}
-        <div style={{ textAlign: 'center', marginBottom: 32 }}>
-          <img src="/logo.jpg" alt="RobertApp" style={{
-            width: 72, height: 72,
+        <div style={{ textAlign: 'center', marginBottom: 32, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+          <div style={{
+            width: 100, height: 100,
             borderRadius: '50%',
-            objectFit: 'cover',
+            background: 'linear-gradient(135deg, var(--color-accent), #a78bfa, #818cf8)',
+            padding: 3,
             marginBottom: 16,
-            boxShadow: '0 0 24px rgba(99, 102, 241, 0.3), 0 0 48px rgba(99, 102, 241, 0.1)',
-            border: '3px solid var(--color-accent)',
-          }} />
-          <h1 style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--color-text-primary)', marginBottom: 4 }}>
+            boxShadow: '0 0 30px rgba(99, 102, 241, 0.4), 0 0 60px rgba(99, 102, 241, 0.15)',
+            animation: 'pulse-glow 3s ease-in-out infinite',
+          }}>
+            <img src="/logo.jpg" alt="RobertApp" style={{
+              width: '100%', height: '100%',
+              borderRadius: '50%',
+              objectFit: 'cover',
+              display: 'block',
+              border: '3px solid var(--color-bg-card)',
+            }} />
+          </div>
+          <h1 style={{ fontSize: '1.6rem', fontWeight: 700, color: 'var(--color-text-primary)', marginBottom: 4, letterSpacing: '-0.02em' }}>
             RobertApp
           </h1>
           <p style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)' }}>
@@ -127,7 +136,13 @@ export default function LoginPage() {
           Demo: <strong>robert@robertapp.com</strong> / <strong>robert2026</strong>
         </div>
       </div>
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes pulse-glow {
+          0%, 100% { box-shadow: 0 0 30px rgba(99, 102, 241, 0.4), 0 0 60px rgba(99, 102, 241, 0.15); }
+          50% { box-shadow: 0 0 40px rgba(99, 102, 241, 0.6), 0 0 80px rgba(99, 102, 241, 0.25); }
+        }
+      `}</style>
     </div>
   )
 }
