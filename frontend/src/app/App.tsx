@@ -3,6 +3,8 @@ import MainLayout from '@/components/layout/MainLayout'
 import DashboardPage from '@/modules/dashboard/DashboardPage'
 import GastosPage from '@/modules/gastos/GastosPage'
 import AhorrosPage from '@/modules/ahorros/AhorrosPage'
+import ReportesPage from '@/modules/reportes/ReportesPage'
+import NotificacionesPage from '@/modules/notificaciones/NotificacionesPage'
 import LoginPage from '@/modules/auth/LoginPage'
 import { ThemeProvider } from '@/hooks/useTheme'
 import { AuthProvider, useAuth } from '@/hooks/useAuth'
@@ -60,7 +62,9 @@ function AppRoutes() {
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/gastos" element={<GastosPage />} />
+        <Route path="/reportes" element={<ReportesPage />} />
         <Route path="/ahorros" element={<AhorrosPage />} />
+        <Route path="/notificaciones" element={<NotificacionesPage />} />
       </Route>
     </Routes>
   )

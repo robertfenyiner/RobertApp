@@ -1,7 +1,7 @@
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, Receipt, PiggyBank, Settings,
-  ChevronLeft, ChevronRight, LogOut,
+  ChevronLeft, ChevronRight, LogOut, BarChart3, Bell,
 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 
@@ -16,9 +16,13 @@ const navItems = [
   { section: 'General', items: [{ to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard }] },
   { section: 'Módulos', items: [
     { to: '/gastos', label: 'Gastos', icon: Receipt },
+    { to: '/reportes', label: 'Reportes', icon: BarChart3 },
     { to: '/ahorros', label: 'Ahorros', icon: PiggyBank },
   ]},
-  { section: 'Sistema', items: [{ to: '/settings', label: 'Configuración', icon: Settings }] },
+  { section: 'Sistema', items: [
+    { to: '/notificaciones', label: 'Notificaciones', icon: Bell },
+    { to: '/settings', label: 'Configuración', icon: Settings },
+  ]},
 ]
 
 export default function Sidebar({ collapsed, mobileOpen, onToggle, onMobileClose }: SidebarProps) {

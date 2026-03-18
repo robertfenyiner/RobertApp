@@ -71,6 +71,8 @@ export const gastosAPI = {
     api.get('/gastos', { params }),
   summary: (months?: number) =>
     api.get('/gastos/summary', { params: { months } }),
+  reports: (params?: { from?: string; to?: string; months?: number }) =>
+    api.get('/gastos/reports', { params }),
   create: (data: ExpensePayload) =>
     api.post('/gastos', data),
   update: (id: number, data: Partial<ExpensePayload>) =>
@@ -125,3 +127,13 @@ export const ahorrosAPI = {
     api.put(`/ahorros/banks/${id}`, data),
   summary: () => api.get('/ahorros/summary'),
 }
+
+// ===== Notifications =====
+export const notificationsAPI = {
+  getSettings: () => api.get('/notifications/settings'),
+  updateSettings: (data: { email_enabled?: boolean; email_address?: string; notify_days_before?: number }) =>
+    api.put('/notifications/settings', data),
+  sendTest: () => api.post('/notifications/test'),
+  checkDue: () => api.post('/notifications/check-due'),
+}
+

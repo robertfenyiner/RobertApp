@@ -12,6 +12,7 @@ import ahorrosRoutes from './modules/ahorros/routes'
 import dashboardRoutes from './modules/dashboard/routes'
 import currenciesRoutes from './modules/currencies/routes'
 import filesRoutes from './modules/files/routes'
+import notificationsRoutes, { startNotificationScheduler } from './modules/notifications/routes'
 
 const app = express()
 const PORT = Number(process.env.PORT) || 3001
@@ -63,6 +64,7 @@ app.use('/api/ahorros', ahorrosRoutes)
 app.use('/api/dashboard', dashboardRoutes)
 app.use('/api/currencies', currenciesRoutes)
 app.use('/api/files', filesRoutes)
+app.use('/api/notifications', notificationsRoutes)
 
 // ===== Error Handling =====
 app.use(notFound)
@@ -84,6 +86,9 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`  ║  Env:       ${process.env.NODE_ENV || 'development'}              ║`)
   console.log('  ╚══════════════════════════════════════════╝')
   console.log('')
+
+  // Start notification scheduler
+  startNotificationScheduler()
 })
 
 export default app

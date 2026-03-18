@@ -118,6 +118,163 @@ router.get('/summary', (req: AuthRequest, res: Response) => {
   res.json({ monthlySummary, byCategory, byCurrency })
 })
 
+// GET /api/gastos/reports — detailed reports
+router.get('/reports', (req: AuthRequest, res: Response) => {
+  const userId = req.user!.id
+  const { from, to, months = '12' } = req.query
+
+  const dateFrom = from as string || null
+  const dateTo = to as string || null
+  const monthsNum = Number(months)
+
+  // 1) Monthly trend (last N months)
+  const monthlyTrend = db.prepare(`
+    SELECT
+      strftime('%Y-%m', date) as month,
+      SUM(COALESCE(amount_cop, amount)) as total,
+      COUNT(*) as count
+    FROM expenses
+    WHERE user_id = ? AND date >= date('now', '-' || ? || ' months')
+    GROUP BY strftime('%Y-%m', date)
+    ORDER BY month ASC
+  `).all(userId, monthsNum)
+
+  // 2) Daily breakdown for current month (or selected range)
+  let dailyQuery = `
+    SELECT date, SUM(COALESCE(amount_cop, amount)) as total, COUNT(*) as count
+    FROM expenses WHERE user_id = ?
+  `
+  const dailyParams: any[] = [userId]
+  if (dateFrom && dateTo) {
+    dailyQuery += ' AND date >= ? AND date <= ?'
+    dailyParams.push(dateFrom, dateTo)
+  } else {
+    dailyQuery += " AND date >= date('now', 'start of month')"
+  }
+  dailyQuery += ' GROUP BY date ORDER BY date ASC'
+  const dailyBreakdown = db.prepare(dailyQuery).all(...dailyParams)
+
+  // 3) Category breakdown with percentages
+  let catQuery = `
+    SELECT c.name, c.icon, c.color,
+           SUM(COALESCE(e.amount_cop, e.amount)) as total,
+           COUNT(*) as count
+    FROM expenses e
+    LEFT JOIN categories c ON e.category_id = c.id
+    WHERE e.user_id = ?
+  `
+  const catParams: any[] = [userId]
+  if (dateFrom && dateTo) {
+    catQuery += ' AND e.date >= ? AND e.date <= ?'
+    catParams.push(dateFrom, dateTo)
+  } else {
+    catQuery += " AND e.date >= date('now', '-' || ? || ' months')"
+    catParams.push(monthsNum)
+  }
+  catQuery += ' GROUP BY COALESCE(c.id, 0) ORDER BY total DESC'
+  const categoryBreakdown = db.prepare(catQuery).all(...catParams) as any[]
+
+  const catTotal = categoryBreakdown.reduce((s: number, c: any) => s + c.total, 0)
+  const categoryWithPct = categoryBreakdown.map(c => ({
+    ...c,
+    name: c.name || 'Sin categoría',
+    icon: c.icon || '📋',
+    color: c.color || '#6b7280',
+    percentage: catTotal > 0 ? Math.round((c.total / catTotal) * 1000) / 10 : 0,
+  }))
+
+  // 4) Currency breakdown
+  let curQuery = `
+    SELECT cur.code, cur.name, cur.symbol,
+           SUM(e.amount) as total_original,
+           SUM(COALESCE(e.amount_cop, e.amount)) as total_cop,
+           COUNT(*) as count
+    FROM expenses e
+    JOIN currencies cur ON e.currency_id = cur.id
+    WHERE e.user_id = ?
+  `
+  const curParams: any[] = [userId]
+  if (dateFrom && dateTo) {
+    curQuery += ' AND e.date >= ? AND e.date <= ?'
+    curParams.push(dateFrom, dateTo)
+  } else {
+    curQuery += " AND e.date >= date('now', '-' || ? || ' months')"
+    curParams.push(monthsNum)
+  }
+  curQuery += ' GROUP BY cur.id ORDER BY total_cop DESC'
+  const currencyBreakdown = db.prepare(curQuery).all(...curParams)
+
+  // 5) Top 10 biggest expenses
+  let topQuery = `
+    SELECT e.description, e.amount, e.date,
+           COALESCE(e.amount_cop, e.amount) as amount_cop,
+           c.name as category_name, c.icon as category_icon, c.color as category_color,
+           cur.code as currency_code, cur.symbol as currency_symbol
+    FROM expenses e
+    LEFT JOIN categories c ON e.category_id = c.id
+    JOIN currencies cur ON e.currency_id = cur.id
+    WHERE e.user_id = ?
+  `
+  const topParams: any[] = [userId]
+  if (dateFrom && dateTo) {
+    topQuery += ' AND e.date >= ? AND e.date <= ?'
+    topParams.push(dateFrom, dateTo)
+  } else {
+    topQuery += " AND e.date >= date('now', '-' || ? || ' months')"
+    topParams.push(monthsNum)
+  }
+  topQuery += ' ORDER BY COALESCE(e.amount_cop, e.amount) DESC LIMIT 10'
+  const topExpenses = db.prepare(topQuery).all(...topParams)
+
+  // 6) Recurring vs One-time
+  let recQuery = `
+    SELECT
+      SUM(CASE WHEN is_recurring = 1 THEN COALESCE(amount_cop, amount) ELSE 0 END) as recurring_total,
+      SUM(CASE WHEN is_recurring = 0 THEN COALESCE(amount_cop, amount) ELSE 0 END) as onetime_total,
+      SUM(CASE WHEN is_recurring = 1 THEN 1 ELSE 0 END) as recurring_count,
+      SUM(CASE WHEN is_recurring = 0 THEN 1 ELSE 0 END) as onetime_count
+    FROM expenses WHERE user_id = ?
+  `
+  const recParams: any[] = [userId]
+  if (dateFrom && dateTo) {
+    recQuery += ' AND date >= ? AND date <= ?'
+    recParams.push(dateFrom, dateTo)
+  } else {
+    recQuery += " AND date >= date('now', '-' || ? || ' months')"
+    recParams.push(monthsNum)
+  }
+  const recurringVsOnetime = db.prepare(recQuery).get(...recParams)
+
+  // 7) Month over month change
+  const currentMonth = db.prepare(`
+    SELECT SUM(COALESCE(amount_cop, amount)) as total
+    FROM expenses WHERE user_id = ? AND date >= date('now', 'start of month')
+  `).get(userId) as any
+
+  const prevMonth = db.prepare(`
+    SELECT SUM(COALESCE(amount_cop, amount)) as total
+    FROM expenses WHERE user_id = ?
+      AND date >= date('now', 'start of month', '-1 month')
+      AND date < date('now', 'start of month')
+  `).get(userId) as any
+
+  const currentTotal = currentMonth?.total || 0
+  const prevTotal = prevMonth?.total || 0
+  const monthChange = prevTotal > 0
+    ? Math.round(((currentTotal - prevTotal) / prevTotal) * 1000) / 10
+    : null
+
+  res.json({
+    monthlyTrend,
+    dailyBreakdown,
+    categoryBreakdown: categoryWithPct,
+    currencyBreakdown,
+    topExpenses,
+    recurringVsOnetime,
+    monthOverMonth: { current: currentTotal, previous: prevTotal, changePercent: monthChange },
+  })
+})
+
 // POST /api/gastos — create expense
 router.post('/', (req: AuthRequest, res: Response) => {
   const {
