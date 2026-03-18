@@ -265,8 +265,8 @@ export default function AhorrosPage() {
 
       {/* ===== Detail Modal ===== */}
       {selectedBox && boxDetail && (
-        <div ref={overlayRef} className="modal-overlay" onClick={() => { setSelectedBox(null); setBoxDetail(null); setProjection(null) }}>
-          <div ref={modalRef} className="card modal-content modal-large" onClick={e => e.stopPropagation()}>
+        <div ref={overlayRef} className="modal-overlay" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 9999, overflowY: 'auto', padding: '32px 16px' }} onClick={() => { setSelectedBox(null); setBoxDetail(null); setProjection(null) }}>
+          <div ref={modalRef} className="card modal-content modal-large" style={{ padding: 24, maxWidth: 640, width: '100%', margin: '0 auto', position: 'relative', minHeight: 'calc(100vh - 64px)' }} onClick={e => e.stopPropagation()}>
             {/* Modal header */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <div>
