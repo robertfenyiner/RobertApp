@@ -463,16 +463,16 @@ export default function AhorrosPage() {
         .boxes-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; margin-bottom: 24px; }
         .cajita-card { padding: 20px; cursor: pointer; transition: all var(--transition-fast); }
         .cajita-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg); }
-        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: flex-start; justify-content: center; z-index: 9999; padding: 40px 16px 16px; overflow-y: auto; }
-        .modal-content { padding: 24px; max-width: 520px; width: 100%; max-height: none; overflow: visible; margin-bottom: 20px; }
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 9999; overflow-y: auto; display: flex; justify-content: center; padding: 32px 16px 32px; }
+        .modal-content { padding: 24px; max-width: 520px; width: 100%; height: fit-content; align-self: flex-start; }
         .modal-large { max-width: 640px; }
         .hide-mobile { display: inline; }
         @media (max-width: 768px) {
           .hide-mobile { display: none; }
           .box-form-grid { grid-template-columns: 1fr 1fr; }
           .stats-grid { grid-template-columns: 1fr 1fr !important; }
-          .modal-overlay { padding: 0; align-items: stretch; }
-          .modal-content { max-width: 100%; border-radius: 0; min-height: 100vh; padding: 16px; margin-bottom: 0; }
+          .modal-overlay { padding: 0; }
+          .modal-content { max-width: 100%; border-radius: 0; min-height: 100vh; padding: 16px 16px 32px; }
           .modal-large { max-width: 100%; }
         }
         @media (max-width: 480px) {
