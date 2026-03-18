@@ -55,8 +55,17 @@ export default function SettingsPage() {
     setSaving(false)
   }
 
+  // Auto-save before any test action
+  const saveFirst = async () => {
+    try {
+      const r = await notificationsAPI.updateSettings(form)
+      setSettings(r.data)
+    } catch { /* ignore save errors here, test will show its own */ }
+  }
+
   const handleTestEmail = async () => {
     setTestingEmail(true)
+    await saveFirst()
     try {
       const r = await notificationsAPI.sendTest()
       showMsg('success', r.data.message)
@@ -68,6 +77,7 @@ export default function SettingsPage() {
 
   const handleTestTelegram = async () => {
     setTestingTg(true)
+    await saveFirst()
     try {
       const r = await notificationsAPI.testTelegram()
       showMsg('success', r.data.message)
@@ -79,6 +89,7 @@ export default function SettingsPage() {
 
   const handleSendReport = async () => {
     setSendingReport(true)
+    await saveFirst()
     try {
       const r = await notificationsAPI.sendSavingsReport()
       showMsg('success', r.data.message)
