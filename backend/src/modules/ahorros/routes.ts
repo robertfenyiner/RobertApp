@@ -57,6 +57,30 @@ router.put('/banks/:id', (req: AuthRequest, res: Response) => {
   res.json(updated)
 })
 
+// DELETE /api/ahorros/banks/:id
+router.delete('/banks/:id', (req: AuthRequest, res: Response) => {
+  const { id } = req.params
+  const userId = req.user!.id
+
+  // Check if bank has boxes
+  const boxCount = db.prepare(
+    'SELECT COUNT(*) as count FROM savings_boxes WHERE bank_id = ? AND user_id = ?'
+  ).get(id, userId) as any
+
+  if (boxCount.count > 0) {
+    res.status(400).json({ error: `No se puede eliminar: tiene ${boxCount.count} cajita(s) asociada(s)` })
+    return
+  }
+
+  const result = db.prepare('DELETE FROM banks WHERE id = ? AND user_id = ?').run(id, userId)
+  if (result.changes === 0) {
+    res.status(404).json({ error: 'Banco no encontrado' })
+    return
+  }
+
+  res.json({ message: 'Banco eliminado' })
+})
+
 // ==================== SAVINGS BOXES ====================
 
 // GET /api/ahorros/boxes
@@ -101,6 +125,74 @@ router.get('/boxes/:id', (req: AuthRequest, res: Response) => {
   `).all(id)
 
   res.json({ ...box, movements, rateHistory })
+})
+
+// GET /api/ahorros/boxes/:id/projection — compound interest projection
+router.get('/boxes/:id/projection', (req: AuthRequest, res: Response) => {
+  const { id } = req.params
+  const months = Number(req.query.months) || 12
+  const monthlyDeposit = Number(req.query.monthly_deposit) || 0
+
+  const box = db.prepare(`
+    SELECT sb.*, b.rate_ea as bank_rate
+    FROM savings_boxes sb
+    JOIN banks b ON sb.bank_id = b.id
+    WHERE sb.id = ? AND sb.user_id = ?
+  `).get(id, req.user!.id) as any
+
+  if (!box) {
+    res.status(404).json({ error: 'Cajita no encontrada' })
+    return
+  }
+
+  // Convert EA (effective annual) to monthly rate
+  // Formula: monthly_rate = (1 + EA/100)^(1/12) - 1
+  const rateEA = box.bank_rate / 100
+  const monthlyRate = Math.pow(1 + rateEA, 1 / 12) - 1
+
+  const projection: Array<{
+    month: number
+    balance: number
+    interest: number
+    deposit: number
+    cumulativeInterest: number
+    cumulativeDeposits: number
+  }> = []
+
+  let balance = box.balance
+  let cumulativeInterest = 0
+  let cumulativeDeposits = 0
+
+  for (let m = 1; m <= months; m++) {
+    // Interest for this month
+    const interest = balance * monthlyRate
+    balance += interest
+    cumulativeInterest += interest
+
+    // Monthly deposit (if any)
+    balance += monthlyDeposit
+    cumulativeDeposits += monthlyDeposit
+
+    projection.push({
+      month: m,
+      balance: Math.round(balance),
+      interest: Math.round(interest),
+      deposit: monthlyDeposit,
+      cumulativeInterest: Math.round(cumulativeInterest),
+      cumulativeDeposits: Math.round(cumulativeDeposits),
+    })
+  }
+
+  res.json({
+    currentBalance: box.balance,
+    rateEA: box.bank_rate,
+    monthlyRate: Math.round(monthlyRate * 10000) / 100, // as percentage with 2 decimals
+    monthlyDeposit,
+    projection,
+    finalBalance: Math.round(balance),
+    totalInterest: Math.round(cumulativeInterest),
+    totalDeposits: Math.round(cumulativeDeposits),
+  })
 })
 
 // POST /api/ahorros/boxes

@@ -120,11 +120,15 @@ export const ahorrosAPI = {
     api.delete(`/ahorros/boxes/${id}`),
   addMovement: (boxId: number, data: { type: string; amount: number; description?: string; date?: string }) =>
     api.post(`/ahorros/boxes/${boxId}/movements`, data),
+  projection: (id: number, params?: { months?: number; monthly_deposit?: number }) =>
+    api.get(`/ahorros/boxes/${id}/projection`, { params }),
   banks: () => api.get('/ahorros/banks'),
   createBank: (data: { name: string; rate_ea: number }) =>
     api.post('/ahorros/banks', data),
   updateBank: (id: number, data: { name?: string; rate_ea?: number }) =>
     api.put(`/ahorros/banks/${id}`, data),
+  deleteBank: (id: number) =>
+    api.delete(`/ahorros/banks/${id}`),
   summary: () => api.get('/ahorros/summary'),
 }
 
