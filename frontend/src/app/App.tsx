@@ -5,6 +5,7 @@ import GastosPage from '@/modules/gastos/GastosPage'
 import AhorrosPage from '@/modules/ahorros/AhorrosPage'
 import ReportesPage from '@/modules/reportes/ReportesPage'
 import NotificacionesPage from '@/modules/notificaciones/NotificacionesPage'
+import SettingsPage from '@/modules/settings/SettingsPage'
 import LoginPage from '@/modules/auth/LoginPage'
 import { ThemeProvider } from '@/hooks/useTheme'
 import { AuthProvider, useAuth } from '@/hooks/useAuth'
@@ -65,6 +66,7 @@ function AppRoutes() {
         <Route path="/reportes" element={<ReportesPage />} />
         <Route path="/ahorros" element={<AhorrosPage />} />
         <Route path="/notificaciones" element={<NotificacionesPage />} />
+        <Route path="/settings" element={<SettingsPage />} />
       </Route>
     </Routes>
   )

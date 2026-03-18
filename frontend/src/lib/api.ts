@@ -137,9 +137,14 @@ export const ahorrosAPI = {
 // ===== Notifications =====
 export const notificationsAPI = {
   getSettings: () => api.get('/notifications/settings'),
-  updateSettings: (data: { email_enabled?: boolean; email_address?: string; notify_days_before?: number }) =>
-    api.put('/notifications/settings', data),
+  updateSettings: (data: {
+    email_enabled?: boolean; email_address?: string;
+    telegram_enabled?: boolean; telegram_chat_id?: string;
+    notify_days_before?: number
+  }) => api.put('/notifications/settings', data),
   sendTest: () => api.post('/notifications/test'),
+  testTelegram: () => api.post('/notifications/test-telegram'),
+  sendSavingsReport: () => api.post('/notifications/send-savings-report'),
   checkDue: () => api.post('/notifications/check-due'),
 }
 

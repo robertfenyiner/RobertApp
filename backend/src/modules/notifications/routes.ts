@@ -2,6 +2,7 @@ import { Router, Response } from 'express'
 import db from '../../database'
 import { authRequired, type AuthRequest } from '../../middleware/auth'
 import { sendTestEmail, sendRecurringExpenseReminder } from '../../services/emailService'
+import { sendTestTelegramMessage, sendDailySavingsReport } from '../../services/telegramService'
 
 const router = Router()
 router.use(authRequired)
@@ -12,12 +13,10 @@ router.get('/settings', (req: AuthRequest, res: Response) => {
   let settings = db.prepare('SELECT * FROM notification_settings WHERE user_id = ?').get(userId) as any
 
   if (!settings) {
-    // Create default settings
     db.prepare(`
       INSERT INTO notification_settings (user_id, email_enabled, email_address, notify_days_before)
       VALUES (?, 1, ?, 1)
     `).run(userId, req.user!.email)
-
     settings = db.prepare('SELECT * FROM notification_settings WHERE user_id = ?').get(userId)
   }
 
@@ -29,7 +28,6 @@ router.put('/settings', (req: AuthRequest, res: Response) => {
   const userId = req.user!.id
   const { email_enabled, email_address, telegram_enabled, telegram_chat_id, notify_days_before } = req.body
 
-  // Ensure settings exist
   const existing = db.prepare('SELECT id FROM notification_settings WHERE user_id = ?').get(userId)
   if (!existing) {
     db.prepare(`
@@ -76,6 +74,30 @@ router.post('/test', async (req: AuthRequest, res: Response) => {
   }
 })
 
+// POST /api/notifications/test-telegram — send test Telegram message
+router.post('/test-telegram', async (req: AuthRequest, res: Response) => {
+  const userId = req.user!.id
+  const settings = db.prepare('SELECT * FROM notification_settings WHERE user_id = ?').get(userId) as any
+
+  if (!settings?.telegram_chat_id) {
+    res.status(400).json({ error: 'No hay Chat ID de Telegram configurado' })
+    return
+  }
+
+  if (!process.env.TELEGRAM_BOT_TOKEN) {
+    res.status(400).json({ error: 'TELEGRAM_BOT_TOKEN no configurado en el servidor' })
+    return
+  }
+
+  try {
+    await sendTestTelegramMessage(settings.telegram_chat_id)
+    res.json({ message: `Mensaje de prueba enviado a Telegram (Chat ID: ${settings.telegram_chat_id})` })
+  } catch (err: any) {
+    console.error('Test telegram error:', err)
+    res.status(500).json({ error: `Error al enviar mensaje de Telegram: ${err.message}` })
+  }
+})
+
 // POST /api/notifications/check-due — check and notify upcoming expenses
 router.post('/check-due', async (req: AuthRequest, res: Response) => {
   try {
@@ -87,7 +109,18 @@ router.post('/check-due', async (req: AuthRequest, res: Response) => {
   }
 })
 
-// ===== Scheduler Logic =====
+// POST /api/notifications/send-savings-report — manually trigger savings report
+router.post('/send-savings-report', async (req: AuthRequest, res: Response) => {
+  try {
+    const result = await checkAndNotifyDailySavings()
+    res.json(result)
+  } catch (err: any) {
+    console.error('Savings report error:', err)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ===== Expense Notification Scheduler =====
 export async function checkAndNotifyDueExpenses() {
   const usersWithNotifications = db.prepare(`
     SELECT ns.*, u.email as user_email, u.name as user_name
@@ -128,29 +161,86 @@ export async function checkAndNotifyDueExpenses() {
   return { message: `Revisión completada. ${totalNotified} notificaciones enviadas.`, notified: totalNotified }
 }
 
-let schedulerInterval: ReturnType<typeof setInterval> | null = null
+// ===== Daily Savings Notification (Telegram) =====
+export async function checkAndNotifyDailySavings() {
+  if (!process.env.TELEGRAM_BOT_TOKEN) {
+    return { message: 'TELEGRAM_BOT_TOKEN no configurado, omitiendo notificaciones de Telegram.', sent: 0 }
+  }
+
+  const usersWithTelegram = db.prepare(`
+    SELECT ns.*, u.name as user_name
+    FROM notification_settings ns
+    JOIN users u ON ns.user_id = u.id
+    WHERE ns.telegram_enabled = 1 AND ns.telegram_chat_id IS NOT NULL AND ns.telegram_chat_id != ''
+  `).all() as any[]
+
+  let totalSent = 0
+
+  for (const settings of usersWithTelegram) {
+    // Get all boxes with bank rates
+    const boxes = db.prepare(`
+      SELECT sb.*, b.name as bank_name, b.rate_ea as bank_rate
+      FROM savings_boxes sb
+      JOIN banks b ON sb.bank_id = b.id
+      WHERE sb.user_id = ?
+      ORDER BY sb.balance DESC
+    `).all(settings.user_id) as any[]
+
+    if (boxes.length === 0) continue
+
+    // Calculate total interest earned all-time from movements
+    const totalInterestResult = db.prepare(`
+      SELECT COALESCE(SUM(sm.amount), 0) as total
+      FROM savings_movements sm
+      JOIN savings_boxes sb ON sm.savings_box_id = sb.id
+      WHERE sb.user_id = ? AND sm.type = 'interest'
+    `).get(settings.user_id) as any
+
+    try {
+      await sendDailySavingsReport(settings.telegram_chat_id, boxes, totalInterestResult.total)
+      totalSent++
+      console.log(`📱 Reporte diario de ahorros enviado a Telegram para ${settings.user_name}`)
+    } catch (err) {
+      console.error(`Error enviando Telegram a ${settings.user_name}:`, err)
+    }
+  }
+
+  return { message: `Reporte diario enviado a ${totalSent} usuario(s) vía Telegram.`, sent: totalSent }
+}
+
+// ===== Schedulers =====
+let expenseScheduler: ReturnType<typeof setInterval> | null = null
+let savingsScheduler: ReturnType<typeof setInterval> | null = null
 
 export function startNotificationScheduler() {
-  // Run every 12 hours
-  const INTERVAL = 12 * 60 * 60 * 1000
+  // Expense notifications: every 12 hours
+  const EXPENSE_INTERVAL = 12 * 60 * 60 * 1000
 
-  // Initial check after 30 seconds (let server start)
   setTimeout(() => {
-    checkAndNotifyDueExpenses().catch(err => console.error('Scheduled check failed:', err))
+    checkAndNotifyDueExpenses().catch(err => console.error('Scheduled expense check failed:', err))
   }, 30_000)
 
-  schedulerInterval = setInterval(() => {
-    checkAndNotifyDueExpenses().catch(err => console.error('Scheduled check failed:', err))
-  }, INTERVAL)
+  expenseScheduler = setInterval(() => {
+    checkAndNotifyDueExpenses().catch(err => console.error('Scheduled expense check failed:', err))
+  }, EXPENSE_INTERVAL)
 
-  console.log('⏰ Notification scheduler started (every 12h)')
+  // Daily savings report: every 24 hours (first run in 1 minute)
+  const SAVINGS_INTERVAL = 24 * 60 * 60 * 1000
+
+  setTimeout(() => {
+    checkAndNotifyDailySavings().catch(err => console.error('Scheduled savings report failed:', err))
+  }, 60_000) // 1 minute after boot
+
+  savingsScheduler = setInterval(() => {
+    checkAndNotifyDailySavings().catch(err => console.error('Scheduled savings report failed:', err))
+  }, SAVINGS_INTERVAL)
+
+  console.log('⏰ Notification scheduler started (expenses: 12h, savings: 24h)')
 }
 
 export function stopNotificationScheduler() {
-  if (schedulerInterval) {
-    clearInterval(schedulerInterval)
-    schedulerInterval = null
-  }
+  if (expenseScheduler) { clearInterval(expenseScheduler); expenseScheduler = null }
+  if (savingsScheduler) { clearInterval(savingsScheduler); savingsScheduler = null }
 }
 
 export default router
