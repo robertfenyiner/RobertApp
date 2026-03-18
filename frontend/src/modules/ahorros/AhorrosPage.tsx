@@ -1,8 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import {
-  AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
-} from 'recharts'
-import {
   PiggyBank, Plus, TrendingUp, Building2, Percent, DollarSign,
   Loader2, X, Pencil, Trash2, ArrowUpCircle, ArrowDownCircle,
   Sparkles, ChevronDown, ChevronUp, Calculator,
@@ -387,21 +384,6 @@ export default function AhorrosPage() {
                       <div style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--color-warning)' }}>{projection.monthlyRate}%</div>
                     </div>
                   </div>
-                  <ResponsiveContainer width="100%" height={200}>
-                    <AreaChart data={projection.projection}>
-                      <defs>
-                        <linearGradient id="colorBalance" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="var(--color-success)" stopOpacity={0.3} />
-                          <stop offset="95%" stopColor="var(--color-success)" stopOpacity={0} />
-                        </linearGradient>
-                      </defs>
-                      <XAxis dataKey="month" tick={{ fontSize: 10, fill: 'var(--color-text-muted)' }} axisLine={false} tickLine={false} tickFormatter={v => `M${v}`} />
-                      <YAxis tick={{ fontSize: 10, fill: 'var(--color-text-muted)' }} axisLine={false} tickLine={false} tickFormatter={(v: any) => v >= 1000000 ? `${(v/1000000).toFixed(1)}M` : v >= 1000 ? `${(v/1000).toFixed(0)}K` : v} />
-                      <Tooltip contentStyle={{ background: 'var(--color-bg-card)', border: '1px solid var(--color-border)', borderRadius: 8, fontSize: '0.78rem' }}
-                        formatter={(v: any) => [fmt(v as number), '']} labelFormatter={(l: any) => `Mes ${l}`} />
-                      <Area type="monotone" dataKey="balance" stroke="var(--color-success)" fill="url(#colorBalance)" strokeWidth={2} />
-                    </AreaChart>
-                  </ResponsiveContainer>
                 </>
               )}
             </div>
