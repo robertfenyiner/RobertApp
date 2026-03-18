@@ -45,12 +45,12 @@ export async function seedDatabase() {
     insertCat.run(c.name, c.icon, c.color)
   }
 
-  // Banks
+  // Banks with different rates
   const banks = [
-    { name: 'Nu Colombia', rate_ea: 8.75 },
-    { name: 'Bold', rate_ea: 8.50 },
+    { name: 'Nu Colombia', rate_ea: 10.50 },
+    { name: 'Bold', rate_ea: 8.75 },
     { name: 'Bancolombia', rate_ea: 5.50 },
-    { name: 'Nequi', rate_ea: 3.00 },
+    { name: 'Nequi', rate_ea: 11.00 },
     { name: 'Davivienda', rate_ea: 4.25 },
   ]
   const insertBank = db.prepare('INSERT INTO banks (name, rate_ea, user_id) VALUES (?, ?, 1)')
@@ -58,22 +58,95 @@ export async function seedDatabase() {
     insertBank.run(b.name, b.rate_ea)
   }
 
-  // Savings boxes
-  const boxes = [
-    { name: 'Fondo de emergencia', bank_id: 1, balance: 4100000, goal: 10000000 },
-    { name: 'Inversión inicial', bank_id: 1, balance: 3200000, goal: 5000000 },
-    { name: 'Viaje Europa', bank_id: 2, balance: 2400000, goal: 8000000 },
-    { name: 'MacBook Pro', bank_id: 3, balance: 1700000, goal: 7000000 },
+  // ==================== 6 CAJITAS WITH DAILY INTEREST ====================
+  // All created on 2026-02-18 → by 2026-03-18 = 28 days of daily interest history
+
+  const startDate = new Date('2026-02-18')
+  const endDate = new Date('2026-03-18')
+  const DAYS = Math.round((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))
+
+  const cajitas = [
+    { name: 'Fondo de Emergencia', bank_id: 1, initialBalance: 5000000, goal: 15000000, rate: 10.50 },
+    { name: 'Inversión Cripto Reserve', bank_id: 4, initialBalance: 8200000, goal: 20000000, rate: 11.00, rateChange: { day: 14, newRate: 12.50 } },
+    { name: 'Viaje Europa 2027', bank_id: 2, initialBalance: 3500000, goal: 12000000, rate: 8.75 },
+    { name: 'MacBook Pro M5', bank_id: 3, initialBalance: 2100000, goal: 8500000, rate: 5.50, rateChange: { day: 10, newRate: 6.25 } },
+    { name: 'Pago Universidad', bank_id: 5, initialBalance: 6800000, goal: 10000000, rate: 4.25 },
+    { name: 'Casa Propia (Cuota Inicial)', bank_id: 1, initialBalance: 12000000, goal: 50000000, rate: 10.50, rateChange: { day: 20, newRate: 9.80 } },
   ]
-  const insertBox = db.prepare('INSERT INTO savings_boxes (name, bank_id, balance, goal, user_id) VALUES (?, ?, ?, ?, 1)')
-  for (const b of boxes) {
-    insertBox.run(b.name, b.bank_id, b.balance, b.goal)
+
+  const insertBox = db.prepare(
+    'INSERT INTO savings_boxes (name, bank_id, balance, goal, user_id, created_at) VALUES (?, ?, ?, ?, 1, ?)'
+  )
+  const insertMovement = db.prepare(
+    'INSERT INTO savings_movements (savings_box_id, type, amount, description, date) VALUES (?, ?, ?, ?, ?)'
+  )
+  const insertRateHistory = db.prepare(
+    'INSERT INTO rate_history (savings_box_id, rate_ea, start_date, end_date) VALUES (?, ?, ?, ?)'
+  )
+
+  function dateFmt(d: Date) { return d.toISOString().split('T')[0] }
+
+  let totalInterestAll = 0
+
+  for (let ci = 0; ci < cajitas.length; ci++) {
+    const c = cajitas[ci]
+    let balance = c.initialBalance
+    let currentRate = c.rate
+    let totalInterest = 0
+
+    // Insert cajita with initial balance (will update to final later)
+    const boxResult = insertBox.run(c.name, c.bank_id, c.initialBalance, c.goal, dateFmt(startDate))
+    const boxId = Number(boxResult.lastInsertRowid)
+
+    // Initial deposit movement
+    insertMovement.run(boxId, 'deposit', c.initialBalance, 'Depósito inicial', dateFmt(startDate))
+
+    // Initial rate history entry
+    const rateEndDate = c.rateChange ? dateFmt(new Date(startDate.getTime() + c.rateChange.day * 86400000)) : null
+    insertRateHistory.run(boxId, c.rate, dateFmt(startDate), rateEndDate)
+
+    // If there's a rate change, add the new rate entry
+    if (c.rateChange) {
+      const changeDate = new Date(startDate.getTime() + c.rateChange.day * 86400000)
+      insertRateHistory.run(boxId, c.rateChange.newRate, dateFmt(changeDate), null)
+    }
+
+    // Generate daily interest for each day
+    for (let day = 1; day <= DAYS; day++) {
+      const date = new Date(startDate.getTime() + day * 86400000)
+
+      // Check if rate changed on this day
+      if (c.rateChange && day === c.rateChange.day) {
+        currentRate = c.rateChange.newRate
+      }
+
+      // Daily rate from EA: daily = (1 + EA/100)^(1/365) - 1
+      const dailyRate = Math.pow(1 + currentRate / 100, 1 / 365) - 1
+      const interest = Math.round(balance * dailyRate * 100) / 100
+
+      balance += interest
+      totalInterest += interest
+
+      insertMovement.run(
+        boxId, 'interest', interest,
+        `Interés diario (${currentRate}% EA)`,
+        dateFmt(date)
+      )
+    }
+
+    // Update final balance with accrued interest
+    db.prepare('UPDATE savings_boxes SET balance = ? WHERE id = ?').run(Math.round(balance), boxId)
+
+    // If rate changed, update the bank to the final rate
+    if (c.rateChange) {
+      db.prepare('UPDATE banks SET rate_ea = ? WHERE id = ?').run(c.rateChange.newRate, c.bank_id)
+    }
+
+    totalInterestAll += totalInterest
+    console.log(`   💰 ${c.name}: ${c.initialBalance.toLocaleString('es-CO')} → ${Math.round(balance).toLocaleString('es-CO')} (+$${Math.round(totalInterest).toLocaleString('es-CO')} interés, ${DAYS} días, ${currentRate}% EA)`)
   }
 
-  // Expenses — multi-currency (COP=1, USD=2, EUR=3)
-  // cat IDs: 1=Alim, 2=Transp, 3=Salud, 4=Entret, 5=Compras, 6=Serv.Pub, 7=Internet,
-  //          8=Streaming, 9=Seguros, 10=Banco, 11=Educ, 12=Viajes, 13=Hogar,
-  //          14=Cuidado, 15=Hosting, 16=Software, 17=Mascotas, 18=Regalos, 19=Otros
+  // ==================== EXPENSES ====================
   const expenses = [
     { desc: 'Mercado semanal', amount: 185000, cur: 1, cat: 1, date: '2026-03-15', cop: 185000, rate: 1 },
     { desc: 'Netflix Premium', amount: 15.49, cur: 2, cat: 8, date: '2026-03-01', rec: true, freq: 'monthly', cop: 65500, rate: 4228.5 },
@@ -95,7 +168,6 @@ export async function seedDatabase() {
   `)
 
   for (const e of expenses) {
-    // Calculate next_due_date for recurring
     let nextDue: string | null = null
     if (e.rec && e.freq) {
       const d = new Date(e.date)
@@ -117,7 +189,8 @@ export async function seedDatabase() {
   console.log(`   👤 User: robert@robertapp.com / robert2026`)
   console.log(`   📁 ${categories.length} categories`)
   console.log(`   🏦 ${banks.length} banks`)
-  console.log(`   💰 ${boxes.length} savings boxes`)
+  console.log(`   💰 6 cajitas (${DAYS} días de interés diario)`)
+  console.log(`   📈 Total interés acumulado: $${Math.round(totalInterestAll).toLocaleString('es-CO')}`)
   console.log(`   🧾 ${expenses.length} expenses (COP, USD, EUR)`)
 }
 
