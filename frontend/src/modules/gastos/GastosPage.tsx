@@ -54,6 +54,11 @@ export default function GastosPage() {
   const [form, setForm] = useState<FormState>({ ...emptyForm })
   const [pendingFiles, setPendingFiles] = useState<File[]>([])
   const fileRef = useRef<HTMLInputElement>(null)
+  const formRef = useRef<HTMLDivElement>(null)
+
+  const scrollToForm = () => {
+    setTimeout(() => formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100)
+  }
 
   const [showCats, setShowCats] = useState(false)
   const [editCatId, setEditCatId] = useState<number | null>(null)
@@ -82,12 +87,12 @@ export default function GastosPage() {
   useEffect(() => { const t = setTimeout(fetchExpenses, 300); return () => clearTimeout(t) }, [searchTerm, fetchExpenses])
 
   /* Expense CRUD */
-  const openCreate = () => { setEditingId(null); setForm({ ...emptyForm }); setPendingFiles([]); setShowForm(true) }
+  const openCreate = () => { setEditingId(null); setForm({ ...emptyForm }); setPendingFiles([]); setShowForm(true); scrollToForm() }
   const openEdit = (e: any) => {
     setEditingId(e.id)
     setForm({ description: e.description, amount: e.amount, currency_id: e.currency_id, category_id: e.category_id || '',
       date: e.date, is_recurring: !!e.is_recurring, recurring_frequency: e.recurring_frequency || 'monthly', notes: e.notes || '' })
-    setPendingFiles([]); setShowForm(true)
+    setPendingFiles([]); setShowForm(true); scrollToForm()
   }
   const handleSubmit = async (ev: React.FormEvent) => {
     ev.preventDefault()
@@ -189,7 +194,7 @@ export default function GastosPage() {
 
       {/* Create / Edit Form */}
       {showForm && (
-        <div className="card animate-fade-in" style={{ padding: 20, marginBottom: 16 }}>
+        <div ref={formRef} className="card animate-fade-in" style={{ padding: 20, marginBottom: 16 }}>
           <h3 style={{ margin: '0 0 14px', fontSize: '0.9rem', fontWeight: 600 }}>
             {editingId ? '✏️ Editar gasto' : '➕ Nuevo gasto'}
           </h3>
@@ -241,13 +246,11 @@ export default function GastosPage() {
       )}
 
       {/* Summary Cards */}
-      <div className="stats-grid stagger-children">
+      <div className="stats-grid stagger-children" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
         <div className="card stat-card"><div className="stat-icon" style={{ background: 'var(--color-danger-soft)', color: 'var(--color-danger)' }}><Receipt size={20} /></div>
           <div className="stat-label">Total (COP)</div><div className="stat-value">${totalCOP.toLocaleString('es-CO', { maximumFractionDigits: 0 })}</div></div>
         <div className="card stat-card"><div className="stat-icon" style={{ background: 'var(--color-warning-soft)', color: 'var(--color-warning)' }}><Calendar size={20} /></div>
           <div className="stat-label">Transacciones</div><div className="stat-value">{total}</div></div>
-        <div className="card stat-card"><div className="stat-icon" style={{ background: 'var(--color-accent-soft)', color: 'var(--color-accent)' }}><Tag size={20} /></div>
-          <div className="stat-label">Monedas / Categorías</div><div className="stat-value">{new Set(expenses.map(e => e.currency_code)).size} / {new Set(expenses.map(e => e.category_name).filter(Boolean)).size}</div></div>
       </div>
 
       {/* Search */}
