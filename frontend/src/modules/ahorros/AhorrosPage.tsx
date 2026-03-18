@@ -46,6 +46,7 @@ export default function AhorrosPage() {
   const [newRate, setNewRate] = useState<number | null>(null)
   const [changingRate, setChangingRate] = useState(false)
   const modalRef = useRef<HTMLDivElement>(null)
+  const overlayRef = useRef<HTMLDivElement>(null)
 
   const fetchData = useCallback(async () => {
     try {
@@ -105,8 +106,9 @@ export default function AhorrosPage() {
       const p = await ahorrosAPI.projection(box.id, { months: projMonths, monthly_deposit: projDeposit })
       setProjection(p.data)
     } catch (err) { console.error(err) }
-    // Scroll modal content to top after it renders
+    // Scroll modal overlay to top after it renders
     requestAnimationFrame(() => {
+      if (overlayRef.current) overlayRef.current.scrollTop = 0
       if (modalRef.current) modalRef.current.scrollTop = 0
     })
   }
@@ -263,7 +265,7 @@ export default function AhorrosPage() {
 
       {/* ===== Detail Modal ===== */}
       {selectedBox && boxDetail && (
-        <div className="modal-overlay" onClick={() => { setSelectedBox(null); setBoxDetail(null); setProjection(null) }}>
+        <div ref={overlayRef} className="modal-overlay" onClick={() => { setSelectedBox(null); setBoxDetail(null); setProjection(null) }}>
           <div ref={modalRef} className="card modal-content modal-large" onClick={e => e.stopPropagation()}>
             {/* Modal header */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
