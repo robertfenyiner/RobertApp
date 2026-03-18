@@ -392,25 +392,55 @@ export default function AhorrosPage() {
             <div>
               <h4 style={{ margin: '0 0 10px', fontSize: '0.88rem', fontWeight: 600 }}>Historial de Movimientos</h4>
               {boxDetail.movements && boxDetail.movements.length > 0 ? (
-                <div style={{ maxHeight: 200, overflowY: 'auto' }}>
-                  {boxDetail.movements.map((m: any) => {
-                    const Icon = MOVE_ICONS[m.type] || DollarSign
-                    return (
-                      <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: '1px solid var(--color-border-light)' }}>
-                        <Icon size={18} style={{ color: MOVE_COLORS[m.type], flexShrink: 0 }} />
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontSize: '0.82rem', fontWeight: 500 }}>{MOVE_LABELS[m.type]}</div>
-                          {m.description && <div style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)' }}>{m.description}</div>}
-                        </div>
-                        <div style={{ textAlign: 'right' }}>
-                          <div style={{ fontSize: '0.85rem', fontWeight: 600, color: MOVE_COLORS[m.type] }}>
-                            {m.type === 'withdrawal' ? '-' : '+'}{fmt(m.amount)}
+                <div style={{ maxHeight: 300, overflowY: 'auto' }}>
+                  {(() => {
+                    // Build map of rate change dates → { from, to }
+                    const rateChangeDates: Record<string, { from: number; to: number }> = {}
+                    if (boxDetail.rateHistory && boxDetail.rateHistory.length > 1) {
+                      const sorted = [...boxDetail.rateHistory].sort((a: any, b: any) => a.start_date.localeCompare(b.start_date))
+                      for (let i = 1; i < sorted.length; i++) {
+                        rateChangeDates[sorted[i].start_date] = { from: sorted[i - 1].rate_ea, to: sorted[i].rate_ea }
+                      }
+                    }
+                    let lastShownChangeDate = ''
+                    return boxDetail.movements.map((m: any) => {
+                      const Icon = MOVE_ICONS[m.type] || DollarSign
+                      const rateChange = rateChangeDates[m.date]
+                      const showBanner = rateChange && m.date !== lastShownChangeDate
+                      if (showBanner) lastShownChangeDate = m.date
+                      return (
+                        <div key={m.id}>
+                          {showBanner && (
+                            <div style={{
+                              display: 'flex', alignItems: 'center', gap: 6,
+                              padding: '6px 12px', margin: '6px 0', borderRadius: 6,
+                              background: 'linear-gradient(135deg, rgba(245,158,11,0.15), rgba(245,158,11,0.05))',
+                              border: '1px solid rgba(245,158,11,0.3)',
+                            }}>
+                              <Percent size={13} style={{ color: 'var(--color-warning)' }} />
+                              <span style={{ fontSize: '0.74rem', fontWeight: 600, color: 'var(--color-warning)' }}>
+                                ⚡ Cambio de tasa: {rateChange.from}% → {rateChange.to}% EA
+                              </span>
+                              <span style={{ fontSize: '0.68rem', color: 'var(--color-text-muted)', marginLeft: 'auto' }}>{fmtDate(m.date)}</span>
+                            </div>
+                          )}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: '1px solid var(--color-border-light)' }}>
+                            <Icon size={18} style={{ color: MOVE_COLORS[m.type], flexShrink: 0 }} />
+                            <div style={{ flex: 1 }}>
+                              <div style={{ fontSize: '0.82rem', fontWeight: 500 }}>{MOVE_LABELS[m.type]}</div>
+                              {m.description && <div style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)' }}>{m.description}</div>}
+                            </div>
+                            <div style={{ textAlign: 'right' }}>
+                              <div style={{ fontSize: '0.85rem', fontWeight: 600, color: MOVE_COLORS[m.type] }}>
+                                {m.type === 'withdrawal' ? '-' : '+'}{fmt(m.amount)}
+                              </div>
+                              <div style={{ fontSize: '0.68rem', color: 'var(--color-text-muted)' }}>{fmtDate(m.date)}</div>
+                            </div>
                           </div>
-                          <div style={{ fontSize: '0.68rem', color: 'var(--color-text-muted)' }}>{fmtDate(m.date)}</div>
                         </div>
-                      </div>
-                    )
-                  })}
+                      )
+                    })
+                  })()}
                 </div>
               ) : <p style={{ textAlign: 'center', color: 'var(--color-text-muted)', fontSize: '0.82rem' }}>Sin movimientos</p>}
             </div>
