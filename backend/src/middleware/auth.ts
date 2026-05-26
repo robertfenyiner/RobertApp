@@ -1,7 +1,21 @@
 import { Request, Response, NextFunction } from 'express'
 import jwt from 'jsonwebtoken'
 
-const JWT_SECRET = process.env.JWT_SECRET || 'robertapp-dev-secret'
+function resolveJwtSecret(): string {
+  const secret = process.env.JWT_SECRET
+
+  if (secret && secret.trim().length > 0) {
+    return secret
+  }
+
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('JWT_SECRET is required when NODE_ENV=production')
+  }
+
+  return 'robertapp-dev-secret'
+}
+
+export const JWT_SECRET = resolveJwtSecret()
 
 export interface AuthRequest extends Request {
   user?: {
