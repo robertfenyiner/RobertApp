@@ -16,8 +16,8 @@ router.get('/settings', (req: AuthRequest, res: Response) => {
 
   if (!settings) {
     db.prepare(`
-      INSERT INTO notification_settings (user_id, email_enabled, email_address, notify_days_before)
-      VALUES (?, 1, ?, 1)
+      INSERT INTO notification_settings (user_id, email_enabled, email_address, whatsapp_enabled, notify_days_before)
+      VALUES (?, 1, ?, 1, 1)
     `).run(userId, req.user!.email)
     settings = db.prepare('SELECT * FROM notification_settings WHERE user_id = ?').get(userId)
   }
@@ -28,13 +28,13 @@ router.get('/settings', (req: AuthRequest, res: Response) => {
 // PUT /api/notifications/settings
 router.put('/settings', (req: AuthRequest, res: Response) => {
   const userId = req.user!.id
-  const { email_enabled, email_address, telegram_enabled, telegram_chat_id, notify_days_before } = req.body
+  const { email_enabled, email_address, telegram_enabled, telegram_chat_id, whatsapp_enabled, notify_days_before } = req.body
 
   const existing = db.prepare('SELECT id FROM notification_settings WHERE user_id = ?').get(userId)
   if (!existing) {
     db.prepare(`
-      INSERT INTO notification_settings (user_id, email_enabled, email_address, notify_days_before)
-      VALUES (?, 1, ?, 1)
+      INSERT INTO notification_settings (user_id, email_enabled, email_address, whatsapp_enabled, notify_days_before)
+      VALUES (?, 1, ?, 1, 1)
     `).run(userId, req.user!.email)
   }
 
@@ -44,13 +44,18 @@ router.put('/settings', (req: AuthRequest, res: Response) => {
         email_address = COALESCE(?, email_address),
         telegram_enabled = COALESCE(?, telegram_enabled),
         telegram_chat_id = COALESCE(?, telegram_chat_id),
+        whatsapp_enabled = COALESCE(?, whatsapp_enabled),
         notify_days_before = COALESCE(?, notify_days_before),
         updated_at = CURRENT_TIMESTAMP
     WHERE user_id = ?
   `).run(
     email_enabled !== undefined ? (email_enabled ? 1 : 0) : null,
-    email_address, telegram_enabled !== undefined ? (telegram_enabled ? 1 : 0) : null,
-    telegram_chat_id, notify_days_before, userId,
+    email_address,
+    telegram_enabled !== undefined ? (telegram_enabled ? 1 : 0) : null,
+    telegram_chat_id,
+    whatsapp_enabled !== undefined ? (whatsapp_enabled ? 1 : 0) : null,
+    notify_days_before,
+    userId,
   )
 
   const updated = db.prepare('SELECT * FROM notification_settings WHERE user_id = ?').get(userId)
@@ -127,11 +132,15 @@ router.post('/telegram/report', async (req: AuthRequest, res: Response) => {
 })
 
 // GET /api/notifications/whatsapp/status — check WhatsApp/Whatsper configuration and session status
-router.get('/whatsapp/status', async (_req: AuthRequest, res: Response) => {
+router.get('/whatsapp/status', async (req: AuthRequest, res: Response) => {
+  const userId = req.user!.id
+  const settings = db.prepare('SELECT whatsapp_enabled FROM notification_settings WHERE user_id = ?').get(userId) as any
   const config = getWhatsAppConfigStatus()
+  const enabled = settings?.whatsapp_enabled !== 0
 
   if (!config.configured) {
     res.json({
+      enabled,
       configured: false,
       config,
       session: null,
@@ -140,9 +149,21 @@ router.get('/whatsapp/status', async (_req: AuthRequest, res: Response) => {
     return
   }
 
+  if (!enabled) {
+    res.json({
+      enabled,
+      configured: true,
+      config,
+      session: null,
+      message: 'WhatsApp está apagado. No se consultó Whatsper para evitar consumo innecesario.',
+    })
+    return
+  }
+
   try {
     const status = await getWhatsAppSessionStatus()
     res.json({
+      enabled,
       configured: true,
       config,
       session: status.data || status,
@@ -150,6 +171,7 @@ router.get('/whatsapp/status', async (_req: AuthRequest, res: Response) => {
   } catch (err: any) {
     console.error('WhatsApp status error:', err)
     res.status(500).json({
+      enabled,
       configured: true,
       config,
       error: err.response?.data || err.message,
@@ -158,7 +180,13 @@ router.get('/whatsapp/status', async (_req: AuthRequest, res: Response) => {
 })
 
 // POST /api/notifications/whatsapp/test — send test WhatsApp message
-router.post('/whatsapp/test', async (_req: AuthRequest, res: Response) => {
+router.post('/whatsapp/test', async (req: AuthRequest, res: Response) => {
+  const settings = db.prepare('SELECT whatsapp_enabled FROM notification_settings WHERE user_id = ?').get(req.user!.id) as any
+  if (settings?.whatsapp_enabled === 0) {
+    res.status(400).json({ error: 'WhatsApp está apagado. Actívalo para enviar mensajes y consumir cupo de Whatsper.' })
+    return
+  }
+
   try {
     const result = await sendTestWhatsAppMessage()
     res.json({ message: 'Mensaje de prueba enviado por WhatsApp', result })
@@ -170,6 +198,12 @@ router.post('/whatsapp/test', async (_req: AuthRequest, res: Response) => {
 
 // POST /api/notifications/whatsapp/report — send manual finance report via WhatsApp
 router.post('/whatsapp/report', async (req: AuthRequest, res: Response) => {
+  const settings = db.prepare('SELECT whatsapp_enabled FROM notification_settings WHERE user_id = ?').get(req.user!.id) as any
+  if (settings?.whatsapp_enabled === 0) {
+    res.status(400).json({ error: 'WhatsApp está apagado. Actívalo para enviar reportes y consumir cupo de Whatsper.' })
+    return
+  }
+
   try {
     const userId = req.user!.id
     const user = db.prepare('SELECT name FROM users WHERE id = ?').get(userId) as any
