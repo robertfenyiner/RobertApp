@@ -2,7 +2,7 @@ import { Router, Response } from 'express'
 import db from '../../database'
 import { authRequired, type AuthRequest } from '../../middleware/auth'
 import { sendTestEmail, sendRecurringExpenseReminder } from '../../services/emailService'
-import { sendTestTelegramMessage, sendDailySavingsReport } from '../../services/telegramService'
+import { sendTestTelegramMessage, sendDailySavingsReport, sendTelegramFinanceReport } from '../../services/telegramService'
 import { processDueRecurringExpenses } from '../../services/recurringService'
 import { getWhatsAppConfigStatus, getWhatsAppSessionStatus, sendTestWhatsAppMessage, sendWhatsAppFinanceReport } from '../../services/whatsperService'
 
@@ -97,6 +97,32 @@ router.post('/test-telegram', async (req: AuthRequest, res: Response) => {
   } catch (err: any) {
     console.error('Test telegram error:', err)
     res.status(500).json({ error: `Error al enviar mensaje de Telegram: ${err.message}` })
+  }
+})
+
+// POST /api/notifications/telegram/report — send manual finance report via Telegram
+router.post('/telegram/report', async (req: AuthRequest, res: Response) => {
+  const userId = req.user!.id
+  const settings = db.prepare('SELECT * FROM notification_settings WHERE user_id = ?').get(userId) as any
+
+  if (!settings?.telegram_chat_id) {
+    res.status(400).json({ error: 'No hay Chat ID de Telegram configurado' })
+    return
+  }
+
+  if (!process.env.TELEGRAM_BOT_TOKEN) {
+    res.status(400).json({ error: 'TELEGRAM_BOT_TOKEN no configurado en el servidor' })
+    return
+  }
+
+  try {
+    const user = db.prepare('SELECT name FROM users WHERE id = ?').get(userId) as any
+    const report = buildFinanceReport(userId, user?.name || req.user!.email)
+    const result = await sendTelegramFinanceReport(settings.telegram_chat_id, report)
+    res.json({ message: 'Reporte financiero enviado por Telegram', report, result })
+  } catch (err: any) {
+    console.error('Telegram report error:', err)
+    res.status(500).json({ error: `Error al enviar reporte por Telegram: ${err.message}` })
   }
 })
 
