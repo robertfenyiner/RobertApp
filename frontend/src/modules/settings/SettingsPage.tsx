@@ -13,6 +13,7 @@ export default function SettingsPage() {
   const [testingTg, setTestingTg] = useState(false)
   const [testingEmail, setTestingEmail] = useState(false)
   const [testingWhatsApp, setTestingWhatsApp] = useState(false)
+  const [sendingWhatsAppReport, setSendingWhatsAppReport] = useState(false)
   const [checkingWhatsApp, setCheckingWhatsApp] = useState(false)
   const [sendingReport, setSendingReport] = useState(false)
   const [whatsAppStatus, setWhatsAppStatus] = useState<any>(null)
@@ -151,6 +152,17 @@ export default function SettingsPage() {
     setTestingWhatsApp(false)
   }
 
+  const handleSendWhatsAppReport = async () => {
+    setSendingWhatsAppReport(true)
+    try {
+      const r = await notificationsAPI.sendWhatsAppReport()
+      showMsg('success', r.data.message || 'Reporte financiero enviado por WhatsApp')
+    } catch (err: any) {
+      showMsg('error', err.response?.data?.error || 'Error al enviar reporte por WhatsApp')
+    }
+    setSendingWhatsAppReport(false)
+  }
+
   const handleSendReport = async () => {
     setSendingReport(true)
     await saveFirst()
@@ -258,7 +270,7 @@ export default function SettingsPage() {
             </div>
             <div>
               <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 600 }}>WhatsApp</h3>
-              <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--color-text-muted)' }}>Pruebas y estado de WhatsApp vía Whatsper</p>
+              <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--color-text-muted)' }}>Estado, pruebas y reportes vía Whatsper</p>
             </div>
           </div>
 
@@ -292,6 +304,12 @@ export default function SettingsPage() {
               style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '10px 20px' }}>
               {testingWhatsApp ? <Loader2 size={16} className="loading-spin" /> : <MessageCircle size={16} />}
               {testingWhatsApp ? 'Enviando...' : 'Enviar WhatsApp de Prueba'}
+            </button>
+
+            <button className="btn" onClick={handleSendWhatsAppReport} disabled={sendingWhatsAppReport || !whatsAppConfigured}
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '10px 20px', background: 'var(--color-bg-elevated)', border: '1px solid var(--color-border)' }}>
+              {sendingWhatsAppReport ? <Loader2 size={16} className="loading-spin" /> : <Zap size={16} />}
+              {sendingWhatsAppReport ? 'Enviando...' : 'Enviar Reporte Financiero'}
             </button>
           </div>
         </div>
@@ -401,7 +419,7 @@ export default function SettingsPage() {
         <div className="card" style={{ padding: 16, background: 'var(--color-bg-elevated)', border: '1px solid var(--color-border)' }}>
           <p style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)', margin: 0, lineHeight: 1.6 }}>
             📱 <strong>Telegram:</strong> Recibirás un resumen diario con las ganancias de cada cajita de ahorro.<br />
-            💬 <strong>WhatsApp:</strong> Disponible para pruebas y próximos reportes vía Whatsper.<br />
+            💬 <strong>WhatsApp:</strong> Disponible para pruebas y reportes financieros vía Whatsper.<br />
             📧 <strong>Email:</strong> Recibirás recordatorios de gastos recurrentes próximos a vencer.<br />
             🔐 <strong>Seguridad:</strong> Usa una contraseña única y privada para esta aplicación.
           </p>
