@@ -158,6 +158,7 @@ export function initDatabase() {
       email_address TEXT,
       telegram_enabled INTEGER DEFAULT 0,
       telegram_chat_id TEXT,
+      whatsapp_enabled INTEGER DEFAULT 1,
       notify_days_before INTEGER DEFAULT 1,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -174,7 +175,17 @@ export function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_file_attachments_user ON file_attachments(user_id);
   `)
 
+  ensureColumn('notification_settings', 'whatsapp_enabled', 'INTEGER DEFAULT 1')
+
   console.log('✅ Database initialized')
+}
+
+function ensureColumn(table: string, column: string, definition: string) {
+  const columns = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>
+  if (!columns.some(c => c.name === column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`)
+    console.log(`✅ Added column ${table}.${column}`)
+  }
 }
 
 export default db
