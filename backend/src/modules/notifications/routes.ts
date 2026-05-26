@@ -4,7 +4,7 @@ import { authRequired, type AuthRequest } from '../../middleware/auth'
 import { sendTestEmail, sendRecurringExpenseReminder } from '../../services/emailService'
 import { sendTestTelegramMessage, sendDailySavingsReport } from '../../services/telegramService'
 import { processDueRecurringExpenses } from '../../services/recurringService'
-import { getWhatsAppConfigStatus, getWhatsAppSessionStatus, sendTestWhatsAppMessage } from '../../services/whatsperService'
+import { getWhatsAppConfigStatus, getWhatsAppSessionStatus, sendTestWhatsAppMessage, sendWhatsAppFinanceReport } from '../../services/whatsperService'
 
 const router = Router()
 router.use(authRequired)
@@ -142,6 +142,20 @@ router.post('/whatsapp/test', async (_req: AuthRequest, res: Response) => {
   }
 })
 
+// POST /api/notifications/whatsapp/report — send manual finance report via WhatsApp
+router.post('/whatsapp/report', async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user!.id
+    const user = db.prepare('SELECT name FROM users WHERE id = ?').get(userId) as any
+    const report = buildFinanceReport(userId, user?.name || req.user!.email)
+    const result = await sendWhatsAppFinanceReport(report)
+    res.json({ message: 'Reporte financiero enviado por WhatsApp', report, result })
+  } catch (err: any) {
+    console.error('WhatsApp report error:', err)
+    res.status(500).json({ error: `Error al enviar reporte por WhatsApp: ${err.response?.data?.message || err.message}` })
+  }
+})
+
 // POST /api/notifications/check-due — check and notify upcoming expenses
 router.post('/check-due', async (req: AuthRequest, res: Response) => {
   try {
@@ -164,6 +178,61 @@ router.post('/send-savings-report', async (req: AuthRequest, res: Response) => {
     res.status(500).json({ error: err.message })
   }
 })
+
+function buildFinanceReport(userId: number, userName: string) {
+  const todayExpenses = db.prepare(`
+    SELECT COALESCE(SUM(COALESCE(amount_cop, amount)), 0) as total
+    FROM expenses
+    WHERE user_id = ? AND date = date('now')
+  `).get(userId) as any
+
+  const monthExpenses = db.prepare(`
+    SELECT COALESCE(SUM(COALESCE(amount_cop, amount)), 0) as total, COUNT(*) as count
+    FROM expenses
+    WHERE user_id = ? AND date >= date('now', 'start of month')
+  `).get(userId) as any
+
+  const savings = db.prepare(`
+    SELECT COALESCE(SUM(balance), 0) as total, COUNT(*) as count
+    FROM savings_boxes
+    WHERE user_id = ?
+  `).get(userId) as any
+
+  const upcoming = db.prepare(`
+    SELECT COALESCE(SUM(COALESCE(amount_cop, amount)), 0) as total, COUNT(*) as count
+    FROM expenses
+    WHERE user_id = ?
+      AND is_recurring = 1
+      AND next_due_date IS NOT NULL
+      AND next_due_date <= date('now', '+7 days')
+      AND next_due_date >= date('now')
+  `).get(userId) as any
+
+  const topCategory = db.prepare(`
+    SELECT COALESCE(c.name, 'Sin categoría') as name,
+           COALESCE(SUM(COALESCE(e.amount_cop, e.amount)), 0) as total
+    FROM expenses e
+    LEFT JOIN categories c ON e.category_id = c.id
+    WHERE e.user_id = ? AND e.date >= date('now', 'start of month')
+    GROUP BY COALESCE(c.id, 0)
+    ORDER BY total DESC
+    LIMIT 1
+  `).get(userId) as any
+
+  return {
+    userName,
+    generatedAt: new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' }),
+    todayExpensesCOP: todayExpenses.total || 0,
+    monthExpensesCOP: monthExpenses.total || 0,
+    monthExpensesCount: monthExpenses.count || 0,
+    savingsBalanceCOP: savings.total || 0,
+    savingsBoxesCount: savings.count || 0,
+    upcomingRecurringCount: upcoming.count || 0,
+    upcomingRecurringTotalCOP: upcoming.total || 0,
+    topCategoryName: topCategory?.name || null,
+    topCategoryTotalCOP: topCategory?.total || 0,
+  }
+}
 
 // ===== Expense Notification Scheduler =====
 export async function checkAndNotifyDueExpenses() {
