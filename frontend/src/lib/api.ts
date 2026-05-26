@@ -127,7 +127,7 @@ export const ahorrosAPI = {
   createBox: (data: { name: string; bank_id: number; goal?: number; balance?: number }) =>
     api.post('/ahorros/boxes', data),
   updateBox: (id: number, data: { name?: string; bank_id?: number; goal?: number }) =>
-    api.put(`/ahorros/boxes/${id}`, data),
+    api.put(`/ahorros/boxes/${id}`),
   deleteBox: (id: number) =>
     api.delete(`/ahorros/boxes/${id}`),
   addMovement: (boxId: number, data: { type: string; amount: number; description?: string; date?: string }) =>
@@ -156,6 +156,8 @@ export const notificationsAPI = {
   }) => api.put('/notifications/settings', data),
   sendTest: () => api.post('/notifications/test'),
   testTelegram: () => api.post('/notifications/test-telegram'),
+  getWhatsAppStatus: () => api.get('/notifications/whatsapp/status'),
+  testWhatsApp: () => api.post('/notifications/whatsapp/test'),
   sendSavingsReport: () => api.post('/notifications/send-savings-report'),
   checkDue: () => api.post('/notifications/check-due'),
 }
