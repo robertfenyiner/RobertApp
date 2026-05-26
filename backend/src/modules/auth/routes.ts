@@ -87,6 +87,57 @@ router.post('/login', async (req: Request, res: Response) => {
   }
 })
 
+// POST /api/auth/change-password
+router.post('/change-password', authRequired, async (req: AuthRequest, res: Response) => {
+  try {
+    const { currentPassword, newPassword, confirmPassword } = req.body
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      res.status(400).json({ error: 'Contraseña actual, nueva contraseña y confirmación son requeridas' })
+      return
+    }
+
+    if (newPassword.length < 8) {
+      res.status(400).json({ error: 'La nueva contraseña debe tener al menos 8 caracteres' })
+      return
+    }
+
+    if (newPassword !== confirmPassword) {
+      res.status(400).json({ error: 'La nueva contraseña y la confirmación no coinciden' })
+      return
+    }
+
+    if (currentPassword === newPassword) {
+      res.status(400).json({ error: 'La nueva contraseña debe ser diferente a la actual' })
+      return
+    }
+
+    const user = db.prepare(
+      'SELECT id, password FROM users WHERE id = ?'
+    ).get(req.user!.id) as any
+
+    if (!user) {
+      res.status(404).json({ error: 'Usuario no encontrado' })
+      return
+    }
+
+    const valid = await bcrypt.compare(currentPassword, user.password)
+    if (!valid) {
+      res.status(401).json({ error: 'La contraseña actual no es correcta' })
+      return
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 12)
+    db.prepare('UPDATE users SET password = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+      .run(hashedPassword, req.user!.id)
+
+    res.json({ message: 'Contraseña actualizada correctamente' })
+  } catch (err) {
+    console.error('Change password error:', err)
+    res.status(500).json({ error: 'Error al cambiar la contraseña' })
+  }
+})
+
 // GET /api/auth/me
 router.get('/me', authRequired, (req: AuthRequest, res: Response) => {
   const user = db.prepare(
