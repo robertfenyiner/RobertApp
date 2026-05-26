@@ -4,7 +4,6 @@ import fs from 'fs'
 
 const DB_PATH = process.env.DB_PATH || './data/robertapp.db'
 
-// Ensure data directory exists
 const dataDir = path.dirname(DB_PATH)
 if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true })
@@ -12,13 +11,11 @@ if (!fs.existsSync(dataDir)) {
 
 const db: Database.Database = new Database(DB_PATH)
 
-// Enable WAL mode for better concurrent access
 db.pragma('journal_mode = WAL')
 db.pragma('foreign_keys = ON')
 
 export function initDatabase() {
   db.exec(`
-    -- Users
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
@@ -29,7 +26,6 @@ export function initDatabase() {
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
-    -- Monedas
     CREATE TABLE IF NOT EXISTS currencies (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       code TEXT UNIQUE NOT NULL,
@@ -39,7 +35,6 @@ export function initDatabase() {
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
-    -- Default currencies
     INSERT OR IGNORE INTO currencies (code, name, symbol) VALUES
       ('COP', 'Peso Colombiano', '$'),
       ('USD', 'Dólar Americano', '$'),
@@ -51,7 +46,6 @@ export function initDatabase() {
       ('NGN', 'Naira Nigeriana', '₦'),
       ('TRY', 'Lira Turca', '₺');
 
-    -- Categorías de gastos
     CREATE TABLE IF NOT EXISTS categories (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT UNIQUE NOT NULL,
@@ -61,7 +55,6 @@ export function initDatabase() {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
-    -- Empresas / Perfiles
     CREATE TABLE IF NOT EXISTS companies (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
@@ -71,7 +64,6 @@ export function initDatabase() {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
-    -- Gastos (con soporte multi-moneda)
     CREATE TABLE IF NOT EXISTS expenses (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       description TEXT NOT NULL,
@@ -92,7 +84,6 @@ export function initDatabase() {
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
-    -- Bancos
     CREATE TABLE IF NOT EXISTS banks (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT UNIQUE NOT NULL,
@@ -103,7 +94,6 @@ export function initDatabase() {
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
-    -- Cajitas de ahorro
     CREATE TABLE IF NOT EXISTS savings_boxes (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
@@ -115,7 +105,6 @@ export function initDatabase() {
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
-    -- Movimientos de ahorro
     CREATE TABLE IF NOT EXISTS savings_movements (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       savings_box_id INTEGER NOT NULL REFERENCES savings_boxes(id),
@@ -126,7 +115,6 @@ export function initDatabase() {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
-    -- Historial de tasas por cajita
     CREATE TABLE IF NOT EXISTS rate_history (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       savings_box_id INTEGER NOT NULL REFERENCES savings_boxes(id),
@@ -136,7 +124,6 @@ export function initDatabase() {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
-    -- Archivos adjuntos (facturas, recibos, fotos)
     CREATE TABLE IF NOT EXISTS file_attachments (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -150,7 +137,6 @@ export function initDatabase() {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
-    -- Configuración de notificaciones
     CREATE TABLE IF NOT EXISTS notification_settings (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
@@ -164,7 +150,73 @@ export function initDatabase() {
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
-    -- Indices
+    CREATE TABLE IF NOT EXISTS credit_cards (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      bank_name TEXT NOT NULL,
+      country TEXT NOT NULL DEFAULT 'Colombia',
+      last_four TEXT,
+      network TEXT DEFAULT 'Otra',
+      currency_id INTEGER NOT NULL DEFAULT 1 REFERENCES currencies(id),
+      credit_limit REAL DEFAULT 0,
+      interest_rate_monthly REAL DEFAULT 0,
+      interest_rate_annual REAL DEFAULT 0,
+      cut_day INTEGER NOT NULL DEFAULT 1,
+      payment_due_day INTEGER NOT NULL DEFAULT 15,
+      color TEXT DEFAULT '#6366f1',
+      is_active INTEGER DEFAULT 1,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS credit_card_charges (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      card_id INTEGER NOT NULL REFERENCES credit_cards(id) ON DELETE CASCADE,
+      expense_id INTEGER REFERENCES expenses(id) ON DELETE SET NULL,
+      description TEXT NOT NULL,
+      amount REAL NOT NULL,
+      currency_id INTEGER NOT NULL REFERENCES currencies(id),
+      amount_cop REAL,
+      exchange_rate REAL,
+      purchase_date DATE NOT NULL DEFAULT (date('now')),
+      installments INTEGER DEFAULT 1,
+      interest_rate_monthly REAL DEFAULT 0,
+      status TEXT DEFAULT 'active' CHECK(status IN ('active', 'paid', 'cancelled')),
+      notes TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS credit_card_installments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      charge_id INTEGER NOT NULL REFERENCES credit_card_charges(id) ON DELETE CASCADE,
+      card_id INTEGER NOT NULL REFERENCES credit_cards(id) ON DELETE CASCADE,
+      installment_number INTEGER NOT NULL,
+      due_date DATE NOT NULL,
+      principal_amount REAL NOT NULL,
+      interest_amount REAL DEFAULT 0,
+      total_amount REAL NOT NULL,
+      status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'paid', 'cancelled')),
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS credit_card_payments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      card_id INTEGER NOT NULL REFERENCES credit_cards(id) ON DELETE CASCADE,
+      amount REAL NOT NULL,
+      currency_id INTEGER NOT NULL REFERENCES currencies(id),
+      amount_cop REAL,
+      payment_date DATE NOT NULL DEFAULT (date('now')),
+      payment_type TEXT DEFAULT 'partial' CHECK(payment_type IN ('minimum', 'full', 'partial', 'advance')),
+      notes TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE INDEX IF NOT EXISTS idx_expenses_user ON expenses(user_id);
     CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(date);
     CREATE INDEX IF NOT EXISTS idx_expenses_category ON expenses(category_id);
@@ -173,9 +225,17 @@ export function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_savings_movements_box ON savings_movements(savings_box_id);
     CREATE INDEX IF NOT EXISTS idx_file_attachments_expense ON file_attachments(expense_id);
     CREATE INDEX IF NOT EXISTS idx_file_attachments_user ON file_attachments(user_id);
+    CREATE INDEX IF NOT EXISTS idx_credit_cards_user ON credit_cards(user_id);
+    CREATE INDEX IF NOT EXISTS idx_credit_card_charges_user ON credit_card_charges(user_id);
+    CREATE INDEX IF NOT EXISTS idx_credit_card_charges_card ON credit_card_charges(card_id);
+    CREATE INDEX IF NOT EXISTS idx_credit_card_installments_card ON credit_card_installments(card_id);
+    CREATE INDEX IF NOT EXISTS idx_credit_card_installments_due ON credit_card_installments(due_date);
+    CREATE INDEX IF NOT EXISTS idx_credit_card_payments_card ON credit_card_payments(card_id);
   `)
 
   ensureColumn('notification_settings', 'whatsapp_enabled', 'INTEGER DEFAULT 1')
+  ensureColumn('expenses', 'payment_method', "TEXT DEFAULT 'cash'")
+  ensureColumn('expenses', 'credit_card_id', 'INTEGER REFERENCES credit_cards(id)')
 
   console.log('✅ Database initialized')
 }
