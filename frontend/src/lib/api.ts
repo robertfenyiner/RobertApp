@@ -158,6 +158,7 @@ export const notificationsAPI = {
   testTelegram: () => api.post('/notifications/test-telegram'),
   getWhatsAppStatus: () => api.get('/notifications/whatsapp/status'),
   testWhatsApp: () => api.post('/notifications/whatsapp/test'),
+  sendWhatsAppReport: () => api.post('/notifications/whatsapp/report'),
   sendSavingsReport: () => api.post('/notifications/send-savings-report'),
   checkDue: () => api.post('/notifications/check-due'),
 }
