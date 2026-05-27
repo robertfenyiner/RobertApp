@@ -146,6 +146,7 @@ export function initDatabase() {
       telegram_chat_id TEXT,
       whatsapp_enabled INTEGER DEFAULT 1,
       notify_days_before INTEGER DEFAULT 1,
+      credit_card_notify_days_before INTEGER DEFAULT 3,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
@@ -236,6 +237,7 @@ export function initDatabase() {
   `)
 
   ensureColumn('notification_settings', 'whatsapp_enabled', 'INTEGER DEFAULT 1')
+  ensureColumn('notification_settings', 'credit_card_notify_days_before', 'INTEGER DEFAULT 3')
   ensureColumn('expenses', 'payment_method', "TEXT DEFAULT 'cash'")
   ensureColumn('expenses', 'credit_card_id', 'INTEGER REFERENCES credit_cards(id)')
   ensureColumn('credit_card_installments', 'paid_amount', 'REAL DEFAULT 0')
