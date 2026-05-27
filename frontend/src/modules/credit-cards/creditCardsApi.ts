@@ -12,4 +12,6 @@ export const creditCardsAPI = {
   createPayment: (data: any) => api.post('/credit-cards/payments', data),
   updateChargeInstallments: (id: number, data: { installments: number; interest_rate_monthly: number }) =>
     api.put(`/credit-cards/charges/${id}/installments`, data),
+  sendTelegramReport: () => api.post('/credit-cards/report/telegram'),
+  sendWhatsAppReport: () => api.post('/credit-cards/report/whatsapp'),
 }

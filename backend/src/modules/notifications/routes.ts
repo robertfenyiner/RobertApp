@@ -5,6 +5,7 @@ import { sendTestEmail, sendRecurringExpenseReminder } from '../../services/emai
 import { sendTestTelegramMessage, sendDailySavingsReport, sendTelegramFinanceReport } from '../../services/telegramService'
 import { processDueRecurringExpenses } from '../../services/recurringService'
 import { getWhatsAppConfigStatus, getWhatsAppSessionStatus, sendTestWhatsAppMessage, sendWhatsAppFinanceReport } from '../../services/whatsperService'
+import { checkAndNotifyCreditCardAlerts } from '../../services/creditCardAlertService'
 
 const router = Router()
 router.use(authRequired)
@@ -385,6 +386,7 @@ export async function checkAndNotifyDailySavings() {
 // ===== Schedulers =====
 let expenseScheduler: ReturnType<typeof setInterval> | null = null
 let savingsScheduler: ReturnType<typeof setInterval> | null = null
+let creditCardScheduler: ReturnType<typeof setInterval> | null = null
 
 export function startNotificationScheduler() {
   // Expense notifications: every 12 hours
@@ -411,12 +413,34 @@ export function startNotificationScheduler() {
     checkAndNotifyDailySavings().catch(err => console.error('Scheduled savings report failed:', err))
   }, SAVINGS_INTERVAL)
 
-  console.log('⏰ Notification scheduler started (expenses: 12h, savings: 24h)')
+  // Credit card alerts: every 12 hours, first run after 90 seconds
+  const CREDIT_CARD_INTERVAL = 12 * 60 * 60 * 1000
+
+  setTimeout(() => {
+    checkAndNotifyCreditCardAlerts().catch(err => console.error('Scheduled credit card alerts failed:', err))
+  }, 90_000)
+
+  creditCardScheduler = setInterval(() => {
+    checkAndNotifyCreditCardAlerts().catch(err => console.error('Scheduled credit card alerts failed:', err))
+  }, CREDIT_CARD_INTERVAL)
+
+  console.log('⏰ Notification scheduler started (expenses: 12h, savings: 24h, credit cards: 12h)')
 }
 
 export function stopNotificationScheduler() {
   if (expenseScheduler) { clearInterval(expenseScheduler); expenseScheduler = null }
   if (savingsScheduler) { clearInterval(savingsScheduler); savingsScheduler = null }
+  if (creditCardScheduler) { clearInterval(creditCardScheduler); creditCardScheduler = null }
 }
+
+router.post('/credit-cards/check-alerts', async (req: AuthRequest, res: Response) => {
+  try {
+    const result = await checkAndNotifyCreditCardAlerts()
+    res.json(result)
+  } catch (err: any) {
+    console.error('Credit card alerts error:', err)
+    res.status(500).json({ error: err.message })
+  }
+})
 
 export default router

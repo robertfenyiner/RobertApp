@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { AlertCircle, CheckCircle, KeyRound, Loader2, Mail, MessageCircle, Save, Send, Zap } from 'lucide-react'
+import { AlertCircle, CheckCircle, CreditCard, KeyRound, Loader2, Mail, MessageCircle, Save, Send, Zap } from 'lucide-react'
 import { authAPI, notificationsAPI } from '@/lib/api'
 
 export default function SettingsPage() {
@@ -24,6 +24,7 @@ export default function SettingsPage() {
     telegram_chat_id: '',
     whatsapp_enabled: true,
     notify_days_before: 1,
+    credit_card_notify_days_before: 3,
   })
 
   const [passwordForm, setPasswordForm] = useState({
@@ -42,6 +43,7 @@ export default function SettingsPage() {
           telegram_chat_id: r.data.telegram_chat_id || '',
           whatsapp_enabled: r.data.whatsapp_enabled !== 0,
           notify_days_before: r.data.notify_days_before || 1,
+          credit_card_notify_days_before: r.data.credit_card_notify_days_before || 3,
         })
       })
       .catch(console.error)
@@ -66,6 +68,7 @@ export default function SettingsPage() {
         telegram_chat_id: r.data.telegram_chat_id || '',
         whatsapp_enabled: r.data.whatsapp_enabled !== 0,
         notify_days_before: r.data.notify_days_before || 1,
+        credit_card_notify_days_before: r.data.credit_card_notify_days_before || 3,
       })
       showMsg('success', 'Configuración guardada correctamente')
       await refreshWhatsAppStatus(false)
@@ -285,6 +288,22 @@ export default function SettingsPage() {
           <label style={{ fontSize: '0.82rem' }}>Días de anticipación: {form.notify_days_before}</label>
           <input type="range" min={1} max={7} value={form.notify_days_before} onChange={e => setForm({ ...form, notify_days_before: Number(e.target.value) })} disabled={!form.email_enabled} />
           <button className="btn btn-primary" onClick={handleTestEmail} disabled={testingEmail || !form.email_enabled || !form.email_address}>{testingEmail ? 'Enviando...' : 'Enviar Email de Prueba'}</button>
+        </Card>
+
+        <Card title="Tarjetas de crédito" subtitle="Alertas automáticas de corte, pago y cuotas" icon={<CreditCard size={22} />}>
+          <label style={{ fontSize: '0.82rem' }}>
+            Días antes para alertas de tarjetas: <strong>{form.credit_card_notify_days_before}</strong>
+          </label>
+          <input
+            type="range"
+            min={1}
+            max={10}
+            value={form.credit_card_notify_days_before}
+            onChange={e => setForm({ ...form, credit_card_notify_days_before: Number(e.target.value) })}
+          />
+          <p style={{ margin: 0, fontSize: '0.76rem', color: 'var(--color-text-muted)' }}>
+            Este valor se usará para avisarte antes de cuotas próximas, cortes y fechas límite de pago.
+          </p>
         </Card>
       </div>
 

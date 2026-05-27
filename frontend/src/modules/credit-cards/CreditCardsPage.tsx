@@ -23,6 +23,8 @@ export default function CreditCardsPage() {
   const [editForm, setEditForm] = useState<any>({})
   const [editingChargeId, setEditingChargeId] = useState<number | null>(null)
   const [chargeEditForm, setChargeEditForm] = useState<any>({})
+  const [sendingTelegramReport, setSendingTelegramReport] = useState(false)
+  const [sendingWhatsAppReport, setSendingWhatsAppReport] = useState(false)
 
   const [cardForm, setCardForm] = useState({
     name: '', bank_name: '', country: 'Colombia', last_four: '', network: 'Visa', currency_id: 1,
@@ -109,6 +111,30 @@ export default function CreditCardsPage() {
     }
   }
 
+  const sendTelegramReport = async () => {
+    setSendingTelegramReport(true)
+    try {
+      const r = await creditCardsAPI.sendTelegramReport()
+      setMessage(r.data.message || 'Reporte enviado por Telegram')
+    } catch (err: any) {
+      setMessage(err.response?.data?.error || 'No se pudo enviar por Telegram')
+    } finally {
+      setSendingTelegramReport(false)
+    }
+  }
+
+  const sendWhatsAppReport = async () => {
+    setSendingWhatsAppReport(true)
+    try {
+      const r = await creditCardsAPI.sendWhatsAppReport()
+      setMessage(r.data.message || 'Reporte enviado por WhatsApp')
+    } catch (err: any) {
+      setMessage(err.response?.data?.error || 'No se pudo enviar por WhatsApp')
+    } finally {
+      setSendingWhatsAppReport(false)
+    }
+  }
+
   const createCharge = async () => {
     await creditCardsAPI.createCharge({ ...chargeForm, card_id: Number(chargeForm.card_id) })
     setChargeForm(f => ({ ...f, description: '', amount: 0, installments: 1, notes: '' }))
@@ -135,6 +161,14 @@ export default function CreditCardsPage() {
           <p className="page-subtitle">Controla tarjetas, consumos, cuotas, pagos y prox mos vencimientos</p>
         </div>
         <button className="btn btn-primary cc-add-btn" onClick={() => setShowNewCard(!showNewCard)}><Plus size={16} /> {showNewCard ? 'Ocultar' : 'Nueva tarjeta'}</button>
+        <div className="cc-report-btns">
+          <button className="btn" onClick={sendTelegramReport} disabled={sendingTelegramReport}>
+            {sendingTelegramReport ? 'Enviando...' : 'Enviar Telegram'}
+          </button>
+          <button className="btn" onClick={sendWhatsAppReport} disabled={sendingWhatsAppReport}>
+            {sendingWhatsAppReport ? 'Enviando...' : 'Enviar WhatsApp'}
+          </button>
+        </div>
       </div>
 
       {message && <div className="card cc-message">{message}</div>}
@@ -264,8 +298,9 @@ export default function CreditCardsPage() {
       </Panel>
 
       <style>{`
-        .cc-header { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; margin-bottom: 20px; }
+        .cc-header { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; margin-bottom: 20px; flex-wrap: wrap; }
         .cc-add-btn { white-space: nowrap; display: flex; align-items: center; gap: 8px; }
+        .cc-report-btns { display: flex; gap: 8px; flex-wrap: wrap; }
         .cc-message { padding: 12px; margin-bottom: 16px; }
         .cc-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 16px; }
         .cc-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 16px; }

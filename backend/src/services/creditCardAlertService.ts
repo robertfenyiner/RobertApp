@@ -139,7 +139,7 @@ export async function checkAndNotifyCreditCardAlerts() {
   let totalSent = 0
 
   for (const settings of users) {
-    const days = Math.max(1, Math.min(10, Number(settings.credit_card_notify_days_before || 3)))
+    const days = Math.max(1, Math.min(15, Number(settings.credit_card_notify_days_before || 3)))
     const reference = `days-${days}`
     if (wasSentToday(settings.user_id, reference)) continue
 

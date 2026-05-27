@@ -1,6 +1,7 @@
 import { Router, Response } from 'express'
 import db from '../../database'
 import { authRequired, type AuthRequest } from '../../middleware/auth'
+import { sendTelegramCreditCardReport, sendWhatsAppCreditCardReport } from '../../services/creditCardReportService'
 
 const router = Router()
 router.use(authRequired)
@@ -291,6 +292,87 @@ router.post('/payments', (req: AuthRequest, res: Response) => {
   const { paymentId, allocation } = tx()
   const payment = db.prepare('SELECT * FROM credit_card_payments WHERE id = ? AND user_id = ?').get(paymentId, userId)
   res.status(201).json({ payment, allocation })
+  })
+
+function buildCreditCardReport(userId: number, userName: string) {
+  const cards = db.prepare(`
+    SELECT cc.*, cur.code as currency_code,
+      COALESCE((
+        SELECT SUM(MAX(total_amount - COALESCE(paid_amount, 0), 0))
+        FROM credit_card_installments i
+        WHERE i.card_id = cc.id AND i.status = 'pending'
+      ), 0) as pending_balance
+    FROM credit_cards cc
+    JOIN currencies cur ON cur.id = cc.currency_id
+    WHERE cc.user_id = ? AND cc.is_active = 1
+    ORDER BY pending_balance DESC
+  `).all(userId) as any[]
+
+  const totalDebt = cards.reduce((sum, c) => sum + Number(c.pending_balance || 0), 0)
+  const totalLimit = cards.reduce((sum, c) => sum + Number(c.credit_limit || 0), 0)
+
+  const upcoming = db.prepare(`
+    SELECT i.*, ch.description, cc.name as card_name,
+      MAX(i.total_amount - COALESCE(i.paid_amount, 0), 0) as remaining_amount
+    FROM credit_card_installments i
+    JOIN credit_card_charges ch ON ch.id = i.charge_id
+    JOIN credit_cards cc ON cc.id = i.card_id
+    WHERE i.user_id = ? AND i.status = 'pending'
+    ORDER BY i.due_date ASC
+    LIMIT 12
+  `).all(userId) as any[]
+
+  return {
+    userName,
+    generatedAt: new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' }),
+    totalDebt,
+    totalLimit,
+    availableLimit: totalLimit - totalDebt,
+    cards,
+    upcoming,
+  }
+}
+
+router.post('/report/telegram', async (req: AuthRequest, res: Response) => {
+  const userId = req.user!.id
+  const settings = db.prepare('SELECT telegram_enabled, telegram_chat_id FROM notification_settings WHERE user_id = ?').get(userId) as any
+
+  if (!settings?.telegram_enabled || !settings?.telegram_chat_id) {
+    res.status(400).json({ error: 'Telegram no esta activo o no tiene Chat ID configurado' })
+    return
+  }
+
+  try {
+    const user = db.prepare('SELECT name FROM users WHERE id = ?').get(userId) as any
+    const report = buildCreditCardReport(userId, user?.name || req.user!.email)
+    const result = await sendTelegramCreditCardReport(settings.telegram_chat_id, report)
+    res.json({ message: 'Reporte de tarjetas enviado por Telegram', report, result })
+  } catch (err: any) {
+    console.error('Credit cards Telegram report error:', err)
+    res.status(500).json({ error: err.message })
+  }
 })
+
+router.post('/report/whatsapp', async (req: AuthRequest, res: Response) => {
+  const userId = req.user!.id
+  const settings = db.prepare('SELECT whatsapp_enabled FROM notification_settings WHERE user_id = ?').get(userId) as any
+
+  if (settings?.whatsapp_enabled === 0) {
+    res.status(400).json({ error: 'WhatsApp esta apagado. Activalo para enviar reportes.' })
+    return
+  }
+
+  try {
+    const user = db.prepare('SELECT name FROM users WHERE id = ?').get(userId) as any
+    const report = buildCreditCardReport(userId, user?.name || req.user!.email)
+    const result = await sendWhatsAppCreditCardReport(report)
+    res.json({ message: 'Reporte de tarjetas enviado por WhatsApp', report, result })
+  } catch (err: any) {
+    console.error('Credit cards WhatsApp report error:', err)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+function someDummy() {}
 
 export default router
