@@ -37,12 +37,41 @@ function createInstallments(userId: number, chargeId: number, card: any, amount:
   }
 }
 
+function applyPaymentToInstallments(userId: number, cardId: number, amount: number, paymentDate: string) {
+  let remaining = amount
+  const installments = db.prepare(`
+    SELECT * FROM credit_card_installments
+    WHERE user_id = ? AND card_id = ? AND status = 'pending'
+    ORDER BY due_date ASC, installment_number ASC, id ASC
+  `).all(userId, cardId) as any[]
+
+  const update = db.prepare(`
+    UPDATE credit_card_installments
+    SET paid_amount = ?, status = ?, paid_at = ?, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ? AND user_id = ?
+  `)
+
+  for (const item of installments) {
+    if (remaining <= 0) break
+    const total = Number(item.total_amount || 0)
+    const alreadyPaid = Number(item.paid_amount || 0)
+    const due = Math.max(0, total - alreadyPaid)
+    const applied = Math.min(remaining, due)
+    const newPaid = alreadyPaid + applied
+    const isPaid = newPaid >= total - 0.01
+    update.run(newPaid, isPaid ? 'paid' : 'pending', isPaid ? paymentDate : null, item.id, userId)
+    remaining -= applied
+  }
+
+  return { applied: amount - remaining, unapplied: remaining }
+}
+
 // GET /api/credit-cards/summary
 router.get('/summary', (req: AuthRequest, res: Response) => {
   const userId = req.user!.id
   const cards = db.prepare(`
     SELECT cc.*, cur.code as currency_code, cur.symbol as currency_symbol,
-      COALESCE((SELECT SUM(total_amount) FROM credit_card_installments i WHERE i.card_id = cc.id AND i.status = 'pending'), 0) as pending_installments,
+      COALESCE((SELECT SUM(MAX(total_amount - COALESCE(paid_amount, 0), 0)) FROM credit_card_installments i WHERE i.card_id = cc.id AND i.status = 'pending'), 0) as pending_installments,
       COALESCE((SELECT SUM(amount) FROM credit_card_payments p WHERE p.card_id = cc.id), 0) as total_payments
     FROM credit_cards cc
     JOIN currencies cur ON cur.id = cc.currency_id
@@ -53,8 +82,10 @@ router.get('/summary', (req: AuthRequest, res: Response) => {
   const totalDebt = cards.reduce((sum, c) => sum + Number(c.pending_installments || 0), 0)
   const totalLimit = cards.reduce((sum, c) => sum + Number(c.credit_limit || 0), 0)
   const upcoming = db.prepare(`
-    SELECT i.*, cc.name as card_name, cc.bank_name
+    SELECT i.*, ch.description, cc.name as card_name, cc.bank_name,
+      MAX(i.total_amount - COALESCE(i.paid_amount, 0), 0) as remaining_amount
     FROM credit_card_installments i
+    JOIN credit_card_charges ch ON ch.id = i.charge_id
     JOIN credit_cards cc ON cc.id = i.card_id
     WHERE i.user_id = ? AND i.status = 'pending' AND i.due_date <= date('now', '+10 days')
     ORDER BY i.due_date ASC
@@ -69,7 +100,7 @@ router.get('/cards', (req: AuthRequest, res: Response) => {
   const userId = req.user!.id
   const cards = db.prepare(`
     SELECT cc.*, cur.code as currency_code, cur.symbol as currency_symbol,
-      COALESCE((SELECT SUM(total_amount) FROM credit_card_installments i WHERE i.card_id = cc.id AND i.status = 'pending'), 0) as pending_balance
+      COALESCE((SELECT SUM(MAX(total_amount - COALESCE(paid_amount, 0), 0)) FROM credit_card_installments i WHERE i.card_id = cc.id AND i.status = 'pending'), 0) as pending_balance
     FROM credit_cards cc
     JOIN currencies cur ON cur.id = cc.currency_id
     WHERE cc.user_id = ?
@@ -179,7 +210,8 @@ router.post('/charges', (req: AuthRequest, res: Response) => {
 router.get('/installments', (req: AuthRequest, res: Response) => {
   const userId = req.user!.id
   const installments = db.prepare(`
-    SELECT i.*, ch.description, cc.name as card_name, cc.bank_name
+    SELECT i.*, ch.description, cc.name as card_name, cc.bank_name,
+      MAX(i.total_amount - COALESCE(i.paid_amount, 0), 0) as remaining_amount
     FROM credit_card_installments i
     JOIN credit_card_charges ch ON ch.id = i.charge_id
     JOIN credit_cards cc ON cc.id = i.card_id
@@ -214,14 +246,20 @@ router.post('/payments', (req: AuthRequest, res: Response) => {
     return
   }
 
+  const date = payment_date || new Date().toISOString().slice(0, 10)
   const conversion = toCOP(Number(amount), Number(currency_id))
-  const result = db.prepare(`
-    INSERT INTO credit_card_payments (user_id, card_id, amount, currency_id, amount_cop, payment_date, payment_type, notes)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(userId, card_id, amount, currency_id, conversion.amount_cop, payment_date || new Date().toISOString().slice(0, 10), payment_type || 'partial', notes || null)
+  const tx = db.transaction(() => {
+    const result = db.prepare(`
+      INSERT INTO credit_card_payments (user_id, card_id, amount, currency_id, amount_cop, payment_date, payment_type, notes)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(userId, card_id, amount, currency_id, conversion.amount_cop, date, payment_type || 'partial', notes || null)
+    const allocation = applyPaymentToInstallments(userId, Number(card_id), Number(amount), date)
+    return { paymentId: result.lastInsertRowid, allocation }
+  })
 
-  const payment = db.prepare('SELECT * FROM credit_card_payments WHERE id = ? AND user_id = ?').get(result.lastInsertRowid, userId)
-  res.status(201).json(payment)
+  const { paymentId, allocation } = tx()
+  const payment = db.prepare('SELECT * FROM credit_card_payments WHERE id = ? AND user_id = ?').get(paymentId, userId)
+  res.status(201).json({ payment, allocation })
 })
 
 export default router
