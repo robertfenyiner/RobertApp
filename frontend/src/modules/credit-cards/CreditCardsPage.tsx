@@ -13,8 +13,9 @@ export default function CreditCardsPage() {
   const [cards, setCards] = useState<any[]>([])
   const [charges, setCharges] = useState<any[]>([])
   const [installments, setInstallments] = useState<any[]>([])
-  const [payments, setPayments] = useState<any[]>([])
   const [currencies, setCurrencies] = useState<any[]>([])
+  const [editingCardId, setEditingCardId] = useState<number | null>(null)
+  const [editForm, setEditForm] = useState<any>({})
 
   const [cardForm, setCardForm] = useState({
     name: '', bank_name: '', country: 'Colombia', last_four: '', network: 'Visa', currency_id: 1,
@@ -32,14 +33,13 @@ export default function CreditCardsPage() {
   const load = async () => {
     setLoading(true)
     try {
-      const [s, c, ch, i, p, cur] = await Promise.all([
-        creditCardsAPI.summary(), creditCardsAPI.cards(), creditCardsAPI.charges(), creditCardsAPI.installments(), creditCardsAPI.payments(), currenciesAPI.list(),
+      const [s, c, ch, i, cur] = await Promise.all([
+        creditCardsAPI.summary(), creditCardsAPI.cards(), creditCardsAPI.charges(), creditCardsAPI.installments(), currenciesAPI.list(),
       ])
       setSummary(s.data)
       setCards(c.data)
       setCharges(ch.data)
       setInstallments(i.data)
-      setPayments(p.data)
       setCurrencies(cur.data)
       if (c.data[0]) {
         setChargeForm(f => ({ ...f, card_id: String(c.data[0].id), currency_id: c.data[0].currency_id, interest_rate_monthly: c.data[0].interest_rate_monthly || 0 }))
@@ -59,6 +59,27 @@ export default function CreditCardsPage() {
     load()
   }
 
+  const startEditCard = (card: any) => {
+    setEditingCardId(card.id)
+    setEditForm({
+      credit_limit: card.credit_limit || 0,
+      interest_rate_monthly: card.interest_rate_monthly || 0,
+      interest_rate_annual: card.interest_rate_annual || 0,
+      cut_day: card.cut_day || 1,
+      payment_due_day: card.payment_due_day || 15,
+      is_active: card.is_active !== 0,
+    })
+  }
+
+  const saveEditCard = async () => {
+    if (!editingCardId) return
+    await creditCardsAPI.updateCard(editingCardId, editForm)
+    setMessage('Tarjeta actualizada')
+    setEditingCardId(null)
+    setEditForm({})
+    load()
+  }
+
   const createCharge = async () => {
     await creditCardsAPI.createCharge({ ...chargeForm, card_id: Number(chargeForm.card_id) })
     setChargeForm(f => ({ ...f, description: '', amount: 0, installments: 1, notes: '' }))
@@ -67,9 +88,11 @@ export default function CreditCardsPage() {
   }
 
   const createPayment = async () => {
-    await creditCardsAPI.createPayment({ ...paymentForm, card_id: Number(paymentForm.card_id) })
+    const r = await creditCardsAPI.createPayment({ ...paymentForm, card_id: Number(paymentForm.card_id) })
+    const allocation = r.data?.allocation
+    const detail = allocation ? ` Aplicado: ${fmt(allocation.applied)}${allocation.unapplied > 0 ? `, sin aplicar: ${fmt(allocation.unapplied)}` : ''}` : ''
     setPaymentForm(f => ({ ...f, amount: 0, notes: '' }))
-    setMessage('Pago registrado')
+    setMessage(`Pago registrado.${detail}`)
     load()
   }
 
@@ -130,17 +153,29 @@ export default function CreditCardsPage() {
           <select className="input" value={paymentForm.currency_id} onChange={e => setPaymentForm({ ...paymentForm, currency_id: Number(e.target.value) })}>{currencies.map(c => <option key={c.id} value={c.id}>{c.code}</option>)}</select>
           <select className="input" value={paymentForm.payment_type} onChange={e => setPaymentForm({ ...paymentForm, payment_type: e.target.value })}><option value="partial">Parcial</option><option value="minimum">Mínimo</option><option value="full">Total</option><option value="advance">Anticipo</option></select>
           <input className="input" type="date" value={paymentForm.payment_date} onChange={e => setPaymentForm({ ...paymentForm, payment_date: e.target.value })} />
-          <button className="btn btn-primary" onClick={createPayment} disabled={!cards.length}>Registrar pago</button>
+          <button className="btn btn-primary" onClick={createPayment} disabled={!cards.length}>Registrar pago y aplicar a cuotas</button>
         </Panel>
 
         <Panel title="Mis tarjetas">
-          {cards.map(c => <div key={c.id} className="cc-row"><strong>{c.name}</strong><span>{c.bank_name} · {c.country} · {c.currency_code}</span><span>Saldo estimado: {fmt(c.pending_balance)}</span></div>)}
+          {cards.map(c => <div key={c.id} className="cc-row">
+            <strong>{c.name} {c.last_four ? `*${c.last_four}` : ''}</strong>
+            <span>{c.bank_name} · {c.country} · {c.currency_code}</span>
+            <span>Cupo: {fmt(c.credit_limit)} · Saldo: {fmt(c.pending_balance)} · Disponible: {fmt(Number(c.credit_limit || 0) - Number(c.pending_balance || 0))}</span>
+            {editingCardId === c.id ? <div className="edit-grid">
+              <input className="input" type="number" placeholder="Cupo" value={editForm.credit_limit} onChange={e => setEditForm({ ...editForm, credit_limit: Number(e.target.value) })} />
+              <input className="input" type="number" placeholder="Tasa mensual" value={editForm.interest_rate_monthly} onChange={e => setEditForm({ ...editForm, interest_rate_monthly: Number(e.target.value) })} />
+              <input className="input" type="number" placeholder="Día corte" value={editForm.cut_day} onChange={e => setEditForm({ ...editForm, cut_day: Number(e.target.value) })} />
+              <input className="input" type="number" placeholder="Día pago" value={editForm.payment_due_day} onChange={e => setEditForm({ ...editForm, payment_due_day: Number(e.target.value) })} />
+              <button className="btn btn-primary" onClick={saveEditCard}>Guardar cambios</button>
+              <button className="btn" onClick={() => setEditingCardId(null)}>Cancelar</button>
+            </div> : <button className="btn" onClick={() => startEditCard(c)}>Editar cupo/tasa/fechas</button>}
+          </div>)}
           {!cards.length && <p>No hay tarjetas registradas.</p>}
         </Panel>
       </div>
 
       <Panel title="Próximas cuotas">
-        {installments.slice(0, 12).map(i => <div key={i.id} className="cc-row"><strong>{i.description}</strong><span>{i.card_name} · cuota {i.installment_number} · vence {i.due_date}</span><span>{fmt(i.total_amount)}</span></div>)}
+        {installments.slice(0, 16).map(i => <div key={i.id} className="cc-row"><strong>{i.description}</strong><span>{i.card_name} · cuota {i.installment_number} · vence {i.due_date} · {i.status}</span><span>Saldo cuota: {fmt(i.remaining_amount ?? i.total_amount)}</span></div>)}
         {!installments.length && <p>No hay cuotas pendientes.</p>}
       </Panel>
 
@@ -151,8 +186,9 @@ export default function CreditCardsPage() {
       <style>{`
         .cc-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 16px; }
         .cc-grid.two { grid-template-columns: 1fr 1fr; }
-        .cc-row { display: flex; flex-direction: column; gap: 3px; padding: 10px 0; border-bottom: 1px solid var(--color-border); }
-        @media (max-width: 900px) { .cc-grid, .cc-grid.two { grid-template-columns: 1fr; } }
+        .cc-row { display: flex; flex-direction: column; gap: 6px; padding: 10px 0; border-bottom: 1px solid var(--color-border); }
+        .edit-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+        @media (max-width: 900px) { .cc-grid, .cc-grid.two, .edit-grid { grid-template-columns: 1fr; } }
       `}</style>
     </div>
   )
