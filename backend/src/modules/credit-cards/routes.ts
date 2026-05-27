@@ -66,7 +66,6 @@ function applyPaymentToInstallments(userId: number, cardId: number, amount: numb
   return { applied: amount - remaining, unapplied: remaining }
 }
 
-// GET /api/credit-cards/summary
 router.get('/summary', (req: AuthRequest, res: Response) => {
   const userId = req.user!.id
   const cards = db.prepare(`
@@ -95,7 +94,6 @@ router.get('/summary', (req: AuthRequest, res: Response) => {
   res.json({ cards, totalDebt, totalLimit, availableLimit: totalLimit - totalDebt, upcoming })
 })
 
-// GET /api/credit-cards/cards
 router.get('/cards', (req: AuthRequest, res: Response) => {
   const userId = req.user!.id
   const cards = db.prepare(`
@@ -109,7 +107,6 @@ router.get('/cards', (req: AuthRequest, res: Response) => {
   res.json(cards)
 })
 
-// POST /api/credit-cards/cards
 router.post('/cards', (req: AuthRequest, res: Response) => {
   const userId = req.user!.id
   const { name, bank_name, country, last_four, network, currency_id, credit_limit, interest_rate_monthly, interest_rate_annual, cut_day, payment_due_day, color } = req.body
@@ -128,7 +125,6 @@ router.post('/cards', (req: AuthRequest, res: Response) => {
   res.status(201).json(card)
 })
 
-// PUT /api/credit-cards/cards/:id
 router.put('/cards/:id', (req: AuthRequest, res: Response) => {
   const userId = req.user!.id
   const id = Number(req.params.id)
@@ -149,11 +145,11 @@ router.put('/cards/:id', (req: AuthRequest, res: Response) => {
   res.json(card)
 })
 
-// GET /api/credit-cards/charges
 router.get('/charges', (req: AuthRequest, res: Response) => {
   const userId = req.user!.id
   const charges = db.prepare(`
-    SELECT ch.*, cc.name as card_name, cc.bank_name, cur.code as currency_code, cur.symbol as currency_symbol
+    SELECT ch.*, cc.name as card_name, cc.bank_name, cur.code as currency_code, cur.symbol as currency_symbol,
+      COALESCE((SELECT SUM(COALESCE(paid_amount, 0)) FROM credit_card_installments i WHERE i.charge_id = ch.id), 0) as paid_total
     FROM credit_card_charges ch
     JOIN credit_cards cc ON cc.id = ch.card_id
     JOIN currencies cur ON cur.id = ch.currency_id
@@ -164,7 +160,6 @@ router.get('/charges', (req: AuthRequest, res: Response) => {
   res.json(charges)
 })
 
-// POST /api/credit-cards/charges
 router.post('/charges', (req: AuthRequest, res: Response) => {
   const userId = req.user!.id
   const { card_id, description, amount, currency_id, purchase_date, installments, interest_rate_monthly, category_id, company_id, notes } = req.body
@@ -206,7 +201,45 @@ router.post('/charges', (req: AuthRequest, res: Response) => {
   res.status(201).json(charge)
 })
 
-// GET /api/credit-cards/installments
+router.put('/charges/:id/installments', (req: AuthRequest, res: Response) => {
+  const userId = req.user!.id
+  const chargeId = Number(req.params.id)
+  const installments = Math.max(1, Number(req.body.installments || 1))
+  const interestRateMonthly = Number(req.body.interest_rate_monthly || 0)
+
+  const charge = db.prepare('SELECT * FROM credit_card_charges WHERE id = ? AND user_id = ?').get(chargeId, userId) as any
+  if (!charge) {
+    res.status(404).json({ error: 'Consumo no encontrado' })
+    return
+  }
+
+  const paid = db.prepare(`
+    SELECT COUNT(*) as count
+    FROM credit_card_installments
+    WHERE charge_id = ? AND user_id = ? AND COALESCE(paid_amount, 0) > 0
+  `).get(chargeId, userId) as any
+
+  if (paid.count > 0) {
+    res.status(400).json({ error: 'No se pueden editar cuotas de un consumo que ya tiene pagos aplicados' })
+    return
+  }
+
+  const card = db.prepare('SELECT * FROM credit_cards WHERE id = ? AND user_id = ?').get(charge.card_id, userId) as any
+  const tx = db.transaction(() => {
+    db.prepare('DELETE FROM credit_card_installments WHERE charge_id = ? AND user_id = ?').run(chargeId, userId)
+    db.prepare(`
+      UPDATE credit_card_charges
+      SET installments = ?, interest_rate_monthly = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND user_id = ?
+    `).run(installments, interestRateMonthly, chargeId, userId)
+    createInstallments(userId, chargeId, card, Number(charge.amount), installments, charge.purchase_date, interestRateMonthly)
+  })
+
+  tx()
+  const updated = db.prepare('SELECT * FROM credit_card_charges WHERE id = ? AND user_id = ?').get(chargeId, userId)
+  res.json({ message: 'Cuotas actualizadas correctamente', charge: updated })
+})
+
 router.get('/installments', (req: AuthRequest, res: Response) => {
   const userId = req.user!.id
   const installments = db.prepare(`
@@ -222,7 +255,6 @@ router.get('/installments', (req: AuthRequest, res: Response) => {
   res.json(installments)
 })
 
-// GET /api/credit-cards/payments
 router.get('/payments', (req: AuthRequest, res: Response) => {
   const userId = req.user!.id
   const payments = db.prepare(`
@@ -237,7 +269,6 @@ router.get('/payments', (req: AuthRequest, res: Response) => {
   res.json(payments)
 })
 
-// POST /api/credit-cards/payments
 router.post('/payments', (req: AuthRequest, res: Response) => {
   const userId = req.user!.id
   const { card_id, amount, currency_id, payment_date, payment_type, notes } = req.body
