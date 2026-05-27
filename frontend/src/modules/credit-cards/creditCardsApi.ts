@@ -10,4 +10,6 @@ export const creditCardsAPI = {
   installments: () => api.get('/credit-cards/installments'),
   payments: () => api.get('/credit-cards/payments'),
   createPayment: (data: any) => api.post('/credit-cards/payments', data),
+  updateChargeInstallments: (id: number, data: { installments: number; interest_rate_monthly: number }) =>
+    api.put(`/credit-cards/charges/${id}/installments`, data),
 }

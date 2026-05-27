@@ -21,6 +21,8 @@ export default function CreditCardsPage() {
   const [editingCardId, setEditingCardId] = useState<number | null>(null)
   const [showNewCard, setShowNewCard] = useState(false)
   const [editForm, setEditForm] = useState<any>({})
+  const [editingChargeId, setEditingChargeId] = useState<number | null>(null)
+  const [chargeEditForm, setChargeEditForm] = useState<any>({})
 
   const [cardForm, setCardForm] = useState({
     name: '', bank_name: '', country: 'Colombia', last_four: '', network: 'Visa', currency_id: 1,
@@ -86,6 +88,27 @@ export default function CreditCardsPage() {
     load()
   }
 
+  const startEditCharge = (charge: any) => {
+    setEditingChargeId(charge.id)
+    setChargeEditForm({
+      installments: charge.installments || 1,
+      interest_rate_monthly: charge.interest_rate_monthly || 0,
+    })
+  }
+
+  const saveEditCharge = async () => {
+    if (!editingChargeId) return
+    try {
+      await creditCardsAPI.updateChargeInstallments(editingChargeId, chargeEditForm)
+      setMessage('Cuotas del consumo actualizadas')
+      setEditingChargeId(null)
+      setChargeEditForm({})
+      load()
+    } catch (err: any) {
+      setMessage(err.response?.data?.error || 'No se pudieron actualizar las cuotas')
+    }
+  }
+
   const createCharge = async () => {
     await creditCardsAPI.createCharge({ ...chargeForm, card_id: Number(chargeForm.card_id) })
     setChargeForm(f => ({ ...f, description: '', amount: 0, installments: 1, notes: '' }))
@@ -96,9 +119,9 @@ export default function CreditCardsPage() {
   const createPayment = async () => {
     const r = await creditCardsAPI.createPayment({ ...paymentForm, card_id: Number(paymentForm.card_id) })
     const allocation = r.data?.allocation
-    const detail = allocation ? ` Aplicado: ${fmt(allocation.applied)}${allocation.unapplied > 0 ? `, sin aplicar: ${fmt(allocation.unapplied)}` : ''}` : ''
+    const detail = allocation ? `. Aplicado: ${fmt(allocation.applied)}${allocation.unapplied > 0 ? `, sin aplicar: ${fmt(allocation.unapplied)}` : ''}` : ''
     setPaymentForm(f => ({ ...f, amount: 0, notes: '' }))
-    setMessage(`Pago registrado.${detail}`)
+    setMessage(`Pago registrado${detail}`)
     load()
   }
 
@@ -108,8 +131,8 @@ export default function CreditCardsPage() {
     <div className="animate-fade-in cc-page">
       <div className="cc-header">
         <div>
-          <h1 className="page-title">Tarjetas de Crédito</h1>
-          <p className="page-subtitle">Controla tarjetas, consumos, cuotas, pagos y próximos vencimientos</p>
+          <h1 className="page-title">Tarjetas de Credito</h1>
+          <p className="page-subtitle">Controla tarjetas, consumos, cuotas, pagos y prox mos vencimientos</p>
         </div>
         <button className="btn btn-primary cc-add-btn" onClick={() => setShowNewCard(!showNewCard)}><Plus size={16} /> {showNewCard ? 'Ocultar' : 'Nueva tarjeta'}</button>
       </div>
@@ -120,7 +143,7 @@ export default function CreditCardsPage() {
         <Stat title="Deuda estimada" value={fmt(summary?.totalDebt)} icon={<CreditCard />} />
         <Stat title="Cupo total" value={fmt(summary?.totalLimit)} icon={<Wallet />} />
         <Stat title="Cupo disponible" value={fmt(summary?.availableLimit)} icon={<Wallet />} />
-        <Stat title="Cuotas próximas" value={summary?.upcoming?.length || 0} icon={<Receipt />} />
+        <Stat title="Cuotas prox mas" value={summary?.upcoming?.length || 0} icon={<Receipt />} />
       </div>
 
       <Panel title="Mis tarjetas">
@@ -144,8 +167,8 @@ export default function CreditCardsPage() {
               {editingCardId === c.id && <div className="edit-grid labeled">
                 <Field label="Cupo total"><input className="input" type="number" value={editForm.credit_limit} onChange={e => setEditForm({ ...editForm, credit_limit: Number(e.target.value) })} /></Field>
                 <Field label="Tasa mensual %"><input className="input" type="number" value={editForm.interest_rate_monthly} onChange={e => setEditForm({ ...editForm, interest_rate_monthly: Number(e.target.value) })} /></Field>
-                <Field label="Día de corte"><input className="input" type="number" value={editForm.cut_day} onChange={e => setEditForm({ ...editForm, cut_day: Number(e.target.value) })} /></Field>
-                <Field label="Día límite de pago"><input className="input" type="number" value={editForm.payment_due_day} onChange={e => setEditForm({ ...editForm, payment_due_day: Number(e.target.value) })} /></Field>
+                <Field label="Dia de corte"><input className="input" type="number" value={editForm.cut_day} onChange={e => setEditForm({ ...editForm, cut_day: Number(e.target.value) })} /></Field>
+                <Field label="Dia limite de pago"><input className="input" type="number" value={editForm.payment_due_day} onChange={e => setEditForm({ ...editForm, payment_due_day: Number(e.target.value) })} /></Field>
                 <button className="btn btn-primary" onClick={saveEditCard}>Guardar cambios</button>
                 <button className="btn" onClick={() => setEditingCardId(null)}>Cancelar</button>
               </div>}
@@ -159,13 +182,13 @@ export default function CreditCardsPage() {
         <div className="form-grid">
           <Field label="Nombre"><input className="input" placeholder="Davivienda Visa" value={cardForm.name} onChange={e => setCardForm({ ...cardForm, name: e.target.value })} /></Field>
           <Field label="Banco"><input className="input" placeholder="Davivienda" value={cardForm.bank_name} onChange={e => setCardForm({ ...cardForm, bank_name: e.target.value })} /></Field>
-          <Field label="País"><select className="input" value={cardForm.country} onChange={e => setCardForm({ ...cardForm, country: e.target.value })}><option>Colombia</option><option>Turquía</option><option>Nigeria</option><option>Otro</option></select></Field>
-          <Field label="Últimos 4 dígitos"><input className="input" placeholder="6146" value={cardForm.last_four} onChange={e => setCardForm({ ...cardForm, last_four: e.target.value })} /></Field>
+          <Field label="Pais"><select className="input" value={cardForm.country} onChange={e => setCardForm({ ...cardForm, country: e.target.value })}><option>Colombia</option><option>Turquia</option><option>Nigeria</option><option>Otro</option></select></Field>
+          <Field label="Ultimos 4 digitos"><input className="input" placeholder="6146" value={cardForm.last_four} onChange={e => setCardForm({ ...cardForm, last_four: e.target.value })} /></Field>
           <Field label="Moneda"><select className="input" value={cardForm.currency_id} onChange={e => setCardForm({ ...cardForm, currency_id: Number(e.target.value) })}>{currencies.map(c => <option key={c.id} value={c.id}>{c.code}</option>)}</select></Field>
           <Field label="Cupo"><input className="input" type="number" value={cardForm.credit_limit} onChange={e => setCardForm({ ...cardForm, credit_limit: Number(e.target.value) })} /></Field>
           <Field label="Tasa mensual %"><input className="input" type="number" value={cardForm.interest_rate_monthly} onChange={e => setCardForm({ ...cardForm, interest_rate_monthly: Number(e.target.value) })} /></Field>
-          <Field label="Día de corte"><input className="input" type="number" value={cardForm.cut_day} onChange={e => setCardForm({ ...cardForm, cut_day: Number(e.target.value) })} /></Field>
-          <Field label="Día límite de pago"><input className="input" type="number" value={cardForm.payment_due_day} onChange={e => setCardForm({ ...cardForm, payment_due_day: Number(e.target.value) })} /></Field>
+          <Field label="Dia de corte"><input className="input" type="number" value={cardForm.cut_day} onChange={e => setCardForm({ ...cardForm, cut_day: Number(e.target.value) })} /></Field>
+          <Field label="Dia limite de pago"><input className="input" type="number" value={cardForm.payment_due_day} onChange={e => setCardForm({ ...cardForm, payment_due_day: Number(e.target.value) })} /></Field>
         </div>
         <button className="btn btn-primary" onClick={createCard}><Plus size={16} /> Crear tarjeta</button>
       </Panel>}
@@ -173,13 +196,13 @@ export default function CreditCardsPage() {
       <div className="cc-grid two">
         <Panel title="Registrar consumo con tarjeta">
           <Field label="Tarjeta"><select className="input" value={chargeForm.card_id} onChange={e => setChargeForm({ ...chargeForm, card_id: e.target.value })}>{cards.map(c => <option key={c.id} value={c.id}>{c.name} - {c.bank_name}</option>)}</select></Field>
-          <Field label="Descripción"><input className="input" placeholder="YouTube Family" value={chargeForm.description} onChange={e => setChargeForm({ ...chargeForm, description: e.target.value })} /></Field>
+          <Field label="Descripcion"><input className="input" placeholder="YouTube Family" value={chargeForm.description} onChange={e => setChargeForm({ ...chargeForm, description: e.target.value })} /></Field>
           <Field label="Monto"><input className="input" type="number" value={chargeForm.amount} onChange={e => setChargeForm({ ...chargeForm, amount: Number(e.target.value) })} /></Field>
           <Field label="Moneda"><select className="input" value={chargeForm.currency_id} onChange={e => setChargeForm({ ...chargeForm, currency_id: Number(e.target.value) })}>{currencies.map(c => <option key={c.id} value={c.id}>{c.code}</option>)}</select></Field>
           <Field label="Fecha de compra"><input className="input" type="date" value={chargeForm.purchase_date} onChange={e => setChargeForm({ ...chargeForm, purchase_date: e.target.value })} /></Field>
           <div className="mini-grid">
             <Field label="Cuotas"><input className="input" type="number" min={1} value={chargeForm.installments} onChange={e => setChargeForm({ ...chargeForm, installments: Number(e.target.value) })} /></Field>
-            <Field label="Interés mensual %"><input className="input" type="number" value={chargeForm.interest_rate_monthly} onChange={e => setChargeForm({ ...chargeForm, interest_rate_monthly: Number(e.target.value) })} /></Field>
+            <Field label="Interes mensual %"><input className="input" type="number" value={chargeForm.interest_rate_monthly} onChange={e => setChargeForm({ ...chargeForm, interest_rate_monthly: Number(e.target.value) })} /></Field>
           </div>
           <button className="btn btn-primary" onClick={createCharge} disabled={!cards.length}>Registrar consumo</button>
         </Panel>
@@ -188,20 +211,56 @@ export default function CreditCardsPage() {
           <Field label="Tarjeta"><select className="input" value={paymentForm.card_id} onChange={e => setPaymentForm({ ...paymentForm, card_id: e.target.value })}>{cards.map(c => <option key={c.id} value={c.id}>{c.name} - {c.bank_name}</option>)}</select></Field>
           <Field label="Monto pagado"><input className="input" type="number" value={paymentForm.amount} onChange={e => setPaymentForm({ ...paymentForm, amount: Number(e.target.value) })} /></Field>
           <Field label="Moneda"><select className="input" value={paymentForm.currency_id} onChange={e => setPaymentForm({ ...paymentForm, currency_id: Number(e.target.value) })}>{currencies.map(c => <option key={c.id} value={c.id}>{c.code}</option>)}</select></Field>
-          <Field label="Tipo de pago"><select className="input" value={paymentForm.payment_type} onChange={e => setPaymentForm({ ...paymentForm, payment_type: e.target.value })}><option value="partial">Parcial</option><option value="minimum">Mínimo</option><option value="full">Total</option><option value="advance">Anticipo</option></select></Field>
+          <Field label="Tipo de pago"><select className="input" value={paymentForm.payment_type} onChange={e => setPaymentForm({ ...paymentForm, payment_type: e.target.value })}><option value="partial">Parcial</option><option value="minimum">Minimo</option><option value="full">Total</option><option value="advance">Anticipo</option></select></Field>
           <Field label="Fecha de pago"><input className="input" type="date" value={paymentForm.payment_date} onChange={e => setPaymentForm({ ...paymentForm, payment_date: e.target.value })} /></Field>
           <button className="btn btn-primary" onClick={createPayment} disabled={!cards.length}>Registrar pago y aplicar a cuotas</button>
         </Panel>
       </div>
 
-      <Panel title="Próximas cuotas">
-        {installments.slice(0, 8).map(i => <div key={i.id} className="cc-row"><strong>{i.description}</strong><span>{i.card_name} · cuota {i.installment_number} · vence {i.due_date} · {i.status}</span><span>Saldo cuota: {fmt(i.remaining_amount ?? i.total_amount)}</span></div>)}
+      <Panel title="Proximas cuotas">
+        {installments.slice(0, 8).map(i => <div key={i.id} className="cc-row"><strong>{i.description}</strong><span>{i.card_name} - cuota {i.installment_number} - vence {i.due_date} - {i.status}</span><span>Saldo cuota: {fmt(i.remaining_amount ?? i.total_amount)}</span></div>)}
         {installments.length > 8 && <p className="cc-muted">Mostrando 8 de {installments.length} cuotas pendientes.</p>}
         {!installments.length && <p>No hay cuotas pendientes.</p>}
       </Panel>
 
-      <Panel title="Últimos consumos">
-        {charges.slice(0, 8).map(c => <div key={c.id} className="cc-row"><strong>{c.description}</strong><span>{c.card_name} · {c.purchase_date} · {c.installments} cuota(s)</span><span>{c.currency_symbol}{Number(c.amount).toLocaleString('es-CO')} {c.currency_code}</span></div>)}
+      <Panel title="Ultimos consumos">
+        {charges.slice(0, 8).map(c => (
+          c.paid_total > 0
+            ? (
+              <div key={c.id} className="cc-row">
+                <strong>{c.description}</strong>
+                <span>{c.card_name} - {c.purchase_date} - {c.installments} cuota(s) - {c.currency_symbol}{Number(c.amount).toLocaleString('es-CO')} {c.currency_code}</span>
+                <span style={{ color: 'var(--color-success)', fontSize: '0.78rem' }}>Ya tiene pagos aplicados ({fmt(c.paid_total)}) - No editable</span>
+              </div>
+            )
+            : (
+              <div key={c.id} className="cc-row">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <strong>{c.description}</strong>
+                    <span>{c.card_name} - {c.purchase_date} - {c.installments} cuota(s) - {c.currency_symbol}{Number(c.amount).toLocaleString('es-CO')} {c.currency_code}</span>
+                  </div>
+                  <button className="btn" style={{ fontSize: '0.75rem', padding: '4px 10px' }} onClick={() => startEditCharge(c)}>Editar cuotas</button>
+                </div>
+                {editingChargeId === c.id && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8, padding: 12, border: '1px solid var(--color-border)', borderRadius: 8, background: 'var(--color-bg-primary)' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                      <Field label={`Cuotas`}>
+                        <input className="input" type="number" min={1} value={chargeEditForm.installments} onChange={e => setChargeEditForm({ ...chargeEditForm, installments: Number(e.target.value) })} />
+                      </Field>
+                      <Field label={`Interes mensual %`}>
+                        <input className="input" type="number" value={chargeEditForm.interest_rate_monthly} onChange={e => setChargeEditForm({ ...chargeEditForm, interest_rate_monthly: Number(e.target.value) })} />
+                      </Field>
+                    </div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button className="btn btn-primary" style={{ fontSize: '0.75rem', padding: '4px 10px' }} onClick={saveEditCharge}>Guardar cuotas</button>
+                      <button className="btn" style={{ fontSize: '0.75rem', padding: '4px 10px' }} onClick={() => setEditingChargeId(null)}>Cancelar</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+        ))}
       </Panel>
 
       <style>{`
